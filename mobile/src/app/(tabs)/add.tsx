@@ -8,30 +8,31 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import BookCover from '@/components/BookCover';
+import GuidedCamera from '@/components/GuidedCamera';
 import { Button, Caps, Chip, Display, ErrorNote, Italic, Rule, tap } from '@/components/ui';
 import { api, Draft, money, SearchHit } from '@/api';
 import { colors, fonts } from '@/theme';
 
-type Mode = 'search' | 'isbn' | 'photo' | 'manual';
+type Mode = 'camera' | 'search' | 'isbn' | 'manual';
 
 export default function Add() {
   const insets = useSafeAreaInsets();
-  const [mode, setMode] = useState<Mode>('search');
+  const [mode, setMode] = useState<Mode>('camera');
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insets.top + 18, paddingHorizontal: 20, paddingBottom: 60 }}>
         <Caps>A new acquisition</Caps>
         <Display>Add a Book</Display>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 14 }}>
+          <Chip label="Camera" active={mode === 'camera'} onPress={() => setMode('camera')} />
           <Chip label="Search" active={mode === 'search'} onPress={() => setMode('search')} />
           <Chip label="ISBN" active={mode === 'isbn'} onPress={() => setMode('isbn')} />
-          <Chip label="Photograph it" active={mode === 'photo'} onPress={() => setMode('photo')} />
           <Chip label="By hand" active={mode === 'manual'} onPress={() => setMode('manual')} />
         </ScrollView>
         <Rule style={{ marginBottom: 14 }} />
         {mode === 'search' && <SearchMode />}
         {mode === 'isbn' && <IsbnMode />}
-        {mode === 'photo' && <PhotoMode />}
+        {mode === 'camera' && <CameraMode />}
         {mode === 'manual' && <DraftForm initial={{}} />}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -169,6 +170,26 @@ function IsbnMode() {
 
 // ------------------------------------------------------------------- photo
 
+function CameraMode() {
+  const [result, setResult] = useState<null | { draft: Draft; verified: boolean; cost: number; shots: Record<string, { uri: string; b64: string }> }>(null);
+  if (!result) return <GuidedCamera onRead={(r) => setResult(r as any)} />;
+  const upload = async (id: number) => {
+    for (const side of ['front', 'back', 'spine'] as const) {
+      const shot = result.shots[side];
+      if (shot) await api.uploadFace(id, side, shot.b64).catch(() => {});
+    }
+  };
+  return (
+    <View>
+      <Italic style={{ marginBottom: 6 }}>
+        {result.verified ? 'Read from your photos and confirmed with Open Library.' : 'Read from your photos — please check the details.'}
+      </Italic>
+      <Caps style={{ fontSize: 9, marginBottom: 10 }}>{`Cataloguer · ${Object.keys(result.shots).length} photos · ${money(result.cost)} · your photos become its 3D model`}</Caps>
+      <DraftForm initial={result.draft} onSaved={upload} onDone={() => setResult(null)} />
+    </View>
+  );
+}
+
 function PhotoMode() {
   const focused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
@@ -237,7 +258,7 @@ const FIELDS: [keyof Draft | 'height_cm' | 'pages', string][] = [
   ['pages', 'Pages'],
 ];
 
-function DraftForm({ initial, onDone }: { initial: Partial<Draft>; onDone?: () => void }) {
+function DraftForm({ initial, onDone, onSaved }: { initial: Partial<Draft>; onDone?: () => void; onSaved?: (id: number) => Promise<void> }) {
   const router = useRouter();
   const [v, setV] = useState<Record<string, string>>(
     Object.fromEntries(FIELDS.map(([k]) => [k, (initial as any)[k] == null || (initial as any)[k] === 'unknown' ? '' : String((initial as any)[k])])),
@@ -267,6 +288,10 @@ function DraftForm({ initial, onDone }: { initial: Partial<Draft>; onDone?: () =
         status,
       });
       setNote(b.possible_duplicate_of ? 'Added — you may already own a copy of this.' : 'Added to your library.');
+      if (onSaved) {
+        setNote('Saving your photos for the 3D model…');
+        await onSaved(b.id);
+      }
       onDone?.();
       router.push(`/book/${b.id}`);
     } catch (e: any) {

@@ -315,7 +315,16 @@ export default function SessionFinder({ onSnapshot }: { onSnapshot: () => void }
           </View>
         }
         renderItem={({ item: f }) => (
-          <Animated.View entering={FadeInDown.duration(350)} layout={LinearTransition.duration(250)} style={[s.row, f.status === 'pick' && s.rowPick]}>
+          <Animated.View entering={FadeInDown.duration(350)} layout={LinearTransition.duration(250)}>
+          <Pressable
+            disabled={!f.title || !['pick', 'book', 'missing'].includes(f.status)}
+            onPress={() => {
+              tap();
+              router.push({ pathname: '/pick', params: { title: f.title || '', author: f.author || '', stars: String(f.stars || 3), reason: f.note || '' } });
+            }}
+            accessibilityHint="Shows why this book was recommended"
+            style={[s.row, f.status === 'pick' && s.rowPick]}
+          >
             <View style={[s.badge, { borderColor: tone(f.status) }, f.status === 'pick' && { backgroundColor: colors.gold }]}>
               <Text style={{ color: f.status === 'pick' ? colors.paper : tone(f.status), fontFamily: fonts.displayBold, fontSize: 12 }}>{glyph(f.status)}</Text>
             </View>
@@ -350,6 +359,7 @@ export default function SessionFinder({ onSnapshot }: { onSnapshot: () => void }
                 <Caps color={colors.wallText} style={{ fontSize: 8.5 }}>View</Caps>
               </Pressable>
             ) : null}
+          </Pressable>
           </Animated.View>
         )}
       />

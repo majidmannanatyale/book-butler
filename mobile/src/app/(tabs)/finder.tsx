@@ -526,8 +526,14 @@ function Exhibit({ result, photo, onClose, progress = '' }: { result: ScanResult
                 </Italic>
               )}
               {b.status === 'pick' && !!b.stars && (
-                <View style={{ marginTop: 6 }}>
+                <View style={{ marginTop: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Stars n={b.stars} onCream />
+                  <Pressable
+                    hitSlop={8}
+                    onPress={() => router.push({ pathname: '/pick', params: { title: b.title, author: b.author || '', stars: String(b.stars || 3), reason: b.note || '', cover: b.cover_url || '' } })}
+                  >
+                    <Caps style={{ fontSize: 9, color: '#B07A12' }}>Why? →</Caps>
+                  </Pressable>
                 </View>
               )}
               {!!b.note && (

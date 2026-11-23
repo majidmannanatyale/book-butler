@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS usage_log (
 
 BOOK_FIELDS = ("title", "author", "year", "publisher", "binding", "edition", "height_cm", "pages",
                "isbn", "cover_url", "subjects", "collection", "series_index", "status", "favourite",
-               "reading", "progress", "hours_read", "notes", "position")
+               "reading", "progress", "hours_read", "notes", "position", "faces")
 
 
 # ----------------------------------------------------------------- database
@@ -106,6 +106,9 @@ def init_db(reset: bool = False) -> None:
     """Create tables; seed from data/seed_library.json when empty (or on reset)."""
     with db() as con:
         con.executescript(SCHEMA)
+        cols = {r[1] for r in con.execute("PRAGMA table_info(books)")}
+        if "faces" not in cols:   # added later: which sides of the book the user photographed
+            con.execute("ALTER TABLE books ADD COLUMN faces TEXT")
         if reset:
             con.execute("DELETE FROM books")
             con.execute("DELETE FROM collections")
@@ -124,6 +127,8 @@ def _insert_book(con: sqlite3.Connection, b: dict) -> int:
     row = {k: b.get(k) for k in BOOK_FIELDS if b.get(k) is not None}
     if isinstance(row.get("subjects"), list):
         row["subjects"] = json.dumps(row["subjects"][:8])
+    if isinstance(row.get("faces"), list):
+        row["faces"] = json.dumps(row["faces"])
     for k in ("favourite", "reading"):
         if k in row:
             row[k] = int(bool(row[k]))
@@ -140,6 +145,10 @@ def book_to_dict(r: sqlite3.Row) -> dict:
         d["subjects"] = []
     d["favourite"] = bool(d.get("favourite"))
     d["reading"] = bool(d.get("reading"))
+    try:
+        d["faces"] = json.loads(d.get("faces") or "[]")
+    except json.JSONDecodeError:
+        d["faces"] = []
     return d
 
 
@@ -172,6 +181,8 @@ def update_book(book_id: int, changes: dict) -> dict | None:
         return get_book(book_id)
     if isinstance(row.get("subjects"), list):
         row["subjects"] = json.dumps(row["subjects"][:8])
+    if isinstance(row.get("faces"), list):
+        row["faces"] = json.dumps(row["faces"])
     for k in ("favourite", "reading"):
         if k in row:
             row[k] = int(bool(row[k]))

@@ -86,6 +86,7 @@ export type Book = {
   hours_read: number;
   notes?: string | null;
   position: number;
+  faces?: string[];
 };
 
 export type Box = { x: number; y: number; w: number; h: number };
@@ -166,6 +167,23 @@ export type Draft = {
   pages?: number;
 };
 
+export type Explanation = {
+  headline: string;
+  connections: { your_book: string; why: string }[];
+  themes: string[];
+  caveat: string;
+};
+
+export type Sample = {
+  kind: 'excerpt' | 'description' | 'none';
+  source: string;
+  title?: string;
+  opening?: string;
+  text: string;
+  link: string | null;
+  free?: boolean;
+};
+
 // ---------- calls
 export const api = {
   base: getBase,
@@ -217,6 +235,20 @@ export const api = {
       '/api/session/scout',
       { method: 'POST', body: JSON.stringify({ blocks }) },
       20000,
+    ),
+  explain: (b: { title: string; author: string; stars: number; reason: string }) =>
+    req<{ explanation: Explanation; meta: any; usage?: Usage; cached?: boolean }>('/api/explain', { method: 'POST', body: JSON.stringify(b) }, 30000),
+  sampleForBook: (id: number) => req<Sample>(`/api/books/${id}/sample`, undefined, 30000),
+  sampleByTitle: (title: string, author: string) =>
+    req<Sample>(`/api/sample?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}`, undefined, 30000),
+  uploadFace: (id: number, side: 'front' | 'back' | 'spine', image_b64: string) =>
+    req<Book>(`/api/books/${id}/faces/${side}`, { method: 'POST', body: JSON.stringify({ image_b64 }) }, 30000),
+  faceUrl: async (id: number, side: string, v = '') => `${await getBase()}/api/books/${id}/face/${side}.jpg${v ? `?v=${v}` : ''}`,
+  catalogueMulti: (imgs: { front?: string; back?: string; spine?: string; page?: string }) =>
+    req<{ draft: Draft & { needs_info_page?: boolean; ask?: string; isbn_visible?: boolean }; verified: boolean; usage: Usage }>(
+      '/api/catalogue/multi',
+      { method: 'POST', body: JSON.stringify(imgs) },
+      90000,
     ),
   usage: () => req<any>('/api/usage'),
   audit: () => req<any[]>('/api/audit?n=25'),

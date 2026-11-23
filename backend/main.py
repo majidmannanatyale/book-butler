@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 import agents
 import live
+import extras
 import scouts
 import spines
 import audit
@@ -330,6 +331,83 @@ async def session_scout(request: Request, body: OcrIn):
         return await scouts.scout_spines([b.model_dump() for b in body.blocks], client_tag=ip)
     except Exception as exc:  # noqa: BLE001
         raise _friendly(exc)
+
+
+class FaceIn(BaseModel):
+    image_b64: str = Field(min_length=100, max_length=SCAN_MAX_BYTES * 4 // 3 + 64)
+
+
+@app.post("/api/books/{book_id}/faces/{side}")
+def upload_face(book_id: int, side: str, body: FaceIn):
+    """The user's own photo of a book's front / back / spine — the 3D model wears it."""
+    if not library.get_book(book_id):
+        raise HTTPException(404, "No such book.")
+    if side not in extras.SIDES:
+        raise HTTPException(400, "side must be front, back or spine")
+    return extras.save_face(book_id, side, _decode(ImageIn(image_b64=body.image_b64)))
+
+
+@app.get("/api/books/{book_id}/face/{side}.jpg")
+def get_face(book_id: int, side: str):
+    p = extras.face_path(book_id, side)
+    if not p:
+        raise HTTPException(404, "No photo for that side.")
+    return FileResponse(p, media_type="image/jpeg", headers={"Cache-Control": "no-cache"})
+
+
+class MultiIn(BaseModel):
+    front: str | None = None
+    back: str | None = None
+    spine: str | None = None
+    page: str | None = None
+
+
+@app.post("/api/catalogue/multi")
+async def catalogue_multi(request: Request, body: MultiIn):
+    """Front + back + spine (+ an inside page for old books) -> edition details in one vision call."""
+    _rate_limit(request)
+    _budget_ok()
+    imgs = {k: _decode(ImageIn(image_b64=v)) for k, v in body.model_dump().items() if v}
+    if not imgs:
+        raise HTTPException(400, "Send at least one photo.")
+    try:
+        return await extras.catalogue_multi(imgs)
+    except Exception as exc:  # noqa: BLE001
+        raise _friendly(exc)
+
+
+class ExplainIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    author: str = Field(default="", max_length=120)
+    stars: int = 3
+    reason: str = Field(default="", max_length=200)
+
+
+@app.post("/api/explain")
+async def explain(request: Request, body: ExplainIn):
+    """Why was this book recommended to me?"""
+    _rate_limit(request, per_minute=20)
+    _budget_ok()
+    try:
+        return await extras.explain_pick(body.title, body.author, body.stars, body.reason)
+    except Exception as exc:  # noqa: BLE001
+        raise _friendly(exc)
+
+
+@app.get("/api/books/{book_id}/sample")
+async def book_sample(book_id: int):
+    """Opening pages (public domain) or the description + preview link, for unread books."""
+    b = library.get_book(book_id)
+    if not b:
+        raise HTTPException(404, "No such book.")
+    import asyncio as _a
+    return await _a.to_thread(extras.sample_for, b)
+
+
+@app.get("/api/sample")
+async def sample_by_title(title: str, author: str = ""):
+    import asyncio as _a
+    return await _a.to_thread(extras.sample_for, {"title": title, "author": author})
 
 
 class DebugOcrIn(BaseModel):

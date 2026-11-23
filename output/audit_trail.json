@@ -1583,5 +1583,64 @@
       "total": 1.83,
       "scouts": 2
     }
+  },
+  {
+    "timestamp": "2026-11-23T06:23:49+00:00",
+    "kind": "catalogue_multi",
+    "title": "Middlemarch",
+    "sides": [
+      "back",
+      "front"
+    ],
+    "verified": true,
+    "needs_info_page": true,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 1705,
+      "cached_tokens": 0,
+      "cache_write_tokens": 1579,
+      "output_tokens": 79,
+      "requests": 1,
+      "cost_usd": 0.000249,
+      "by_agent": {
+        "cataloguer": {
+          "input_tokens": 1705,
+          "cached_tokens": 0,
+          "cache_write_tokens": 1579,
+          "output_tokens": 79,
+          "requests": 1
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-23T06:23:54+00:00",
+    "kind": "catalogue_multi",
+    "title": "Middlemarch: A Study of Provincial Life",
+    "sides": [
+      "back",
+      "front",
+      "page"
+    ],
+    "verified": true,
+    "needs_info_page": false,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 2372,
+      "cached_tokens": 0,
+      "cache_write_tokens": 2246,
+      "output_tokens": 78,
+      "requests": 1,
+      "cost_usd": 0.000332,
+      "by_agent": {
+        "cataloguer": {
+          "input_tokens": 2372,
+          "cached_tokens": 0,
+          "cache_write_tokens": 2246,
+          "output_tokens": 78,
+          "requests": 1
+        }
+      }
+    }
   }
 ]

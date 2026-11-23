@@ -18,3 +18,4 @@ data/library.db
 data/library.db-*
 output/scans/
 output/debug/
+data/faces/

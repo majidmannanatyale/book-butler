@@ -90,8 +90,13 @@ function BookMesh({
   rows: number;
 }) {
   const ref = useRef<THREE.Group>(null);
-  const spine = useSafeTexture(`${base}/api/books/${p.book.id}/spine.png`);
-  const cover = useSafeTexture(selected ? p.book.cover_url : null);
+  const faces = p.book.faces || [];
+  const spine = useSafeTexture(
+    faces.includes('spine') ? `${base}/api/books/${p.book.id}/face/spine.jpg?v=${faces.length}` : `${base}/api/books/${p.book.id}/spine.png`,
+  );
+  const cover = useSafeTexture(
+    selected ? (faces.includes('front') ? `${base}/api/books/${p.book.id}/face/front.jpg?v=${faces.length}` : p.book.cover_url) : null,
+  );
   const cloth = clothColor(p.book.title);
   const born = useRef<number | null>(null);
   const centerY = (-(rows - 1) * SHELF_GAP) / 2 + 1.1;
