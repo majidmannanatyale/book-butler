@@ -58,6 +58,44 @@ def _coverage(title: str, author: str | None, block_tokens: set[str], block_norm
     return min(1.0, hit + (0.15 if has_author else 0.0))
 
 
+def _ocr_support(title: str, author: str | None, raw: str) -> float:
+    """How well camera text supports an AI-proposed title (0..1), tolerant of OCR slips.
+
+    A title word counts if the spine shows it exactly, glued to a neighbour
+    ("JIMENEZYOURS"), or misread by a letter or two ("ALCHEHI5T" ~ "alchemist").
+    This is the guard against invented titles: the AI may fix spelling, never add words.
+    """
+    import difflib
+    # common OCR confusions on spines: digits read for letters
+    fix = str.maketrans({"5": "s", "0": "o", "1": "l", "8": "b", "4": "a", "3": "e", "6": "g", "7": "t"})
+    toks = {t.translate(fix) for t in _tokens(raw)}
+    squashed = library.norm(raw).replace(" ", "").translate(fix)
+    words = _distinct(title)
+    if not words or not (author or "").strip():
+        return 0.0          # a real identification names its author
+    surname0 = library._surname(author)
+    if library.norm(title) in library.norm(author) or library.norm(title) == surname0:
+        return 0.0          # an author's name is not a title ("Carley Fortune", "Fortune")
+
+    def seen(w: str) -> bool:
+        if w in toks:
+            return True
+        if len(w) >= 4 and (w in squashed or any(w in t for t in toks if len(t) > len(w))):
+            return True
+        if len(w) >= 4:
+            return any(difflib.SequenceMatcher(None, w, t).ratio() >= 0.78 for t in toks if abs(len(t) - len(w)) <= 3)
+        return False
+
+    hit = sum(seen(w) for w in words) / len(words)
+    surname = library._surname(author)
+    author_seen = bool(surname) and len(surname) >= 3 and seen(surname)
+    if len(words) < 3 and not author_seen:
+        return 0.0          # short titles are too easy to "find": the author must be on the spine too
+    if author_seen:
+        hit += 0.15
+    return min(1.0, hit)
+
+
 def _known_titles() -> list[dict]:
     """Owned + wishlist books and the missing volumes of started collections."""
     out = [{"kind": "owned" if b["status"] == "owned" else "wishlist", "title": b["title"],
@@ -89,6 +127,12 @@ def match_blocks(blocks: list[dict]) -> list[dict]:
             if sc > best_s or (sc == best_s and sc > 0 and ln > best_len):   # prefer the more specific title
                 best, best_s, best_len = k, sc, ln
         if best and best_s >= 0.75:
+            # a block that runs across several spines: if much of its text isn't this book,
+            # the phone should ALSO send it to the scouts so the neighbours aren't lost
+            explained = _distinct(best["title"]) | set(_tokens(best.get("author") or ""))
+            leftover = [t for t in btok if t not in explained and t not in _STOP and len(t) >= 4]
+            if len(leftover) >= 3:
+                item["more"] = True
             if best["kind"] == "owned":
                 b = best["book"]
                 item.update(status="owned", title=b["title"], author=b["author"], book_id=b["id"],
@@ -176,7 +220,7 @@ async def identify(blocks: list[dict], client_tag: str = "") -> dict:
                 raw = texts.get(pk.id)
                 if raw is None or looks_like_injection(pk.reason):
                     continue
-                if _coverage(pk.title, pk.author, set(_tokens(raw)), library.norm(raw)) < 0.6:
+                if _ocr_support(pk.title, pk.author, raw) < 0.6:
                     continue          # title not supported by what the camera read -> drop it
                 if library.match_owned(pk.title, pk.author, owned)[0]:
                     continue

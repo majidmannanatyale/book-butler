@@ -12,9 +12,11 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Image } from 'expo-image';
 import { useIsFocused, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import Animated, {
   FadeInDown,
   FadeIn,
+  FadeOut,
   LinearTransition,
   useAnimatedStyle,
   useSharedValue,
@@ -58,6 +60,18 @@ const words = (t: string) =>
 
 const DONE: Status[] = ['owned', 'missing', 'pick', 'book', 'noise', 'flagged'];
 
+/** Same book? (titles from different frames / different OCR blocks) */
+const tnorm = (t?: string) => (t || '').toLowerCase().replace(/^(the|a|an) /, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const sameBook = (a: { title?: string; author?: string }, b: { title?: string; author?: string }) => {
+  const x = tnorm(a.title), y = tnorm(b.title);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const sa = tnorm(a.author).split(' ').pop(), sb = tnorm(b.author).split(' ').pop();
+  return !!sa && sa === sb && (x.startsWith(y) || y.startsWith(x));
+};
+
+type Toast = { key: string; text: string; tone: string };
+
 export default function SessionFinder({ onSnapshot }: { onSnapshot: () => void }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -74,17 +88,49 @@ export default function SessionFinder({ onSnapshot }: { onSnapshot: () => void }
   const [cost, setCost] = useState(0);
   const [lastScout, setLastScout] = useState(0);
   const [error, setError] = useState('');
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [inView, setInView] = useState(0);
   const store = useRef<Record<string, Found>>({});
   const counter = useRef(0);
   const recRef = useRef(false);
   recRef.current = recording;
 
-  const update = useCallback((k: string, patch: Partial<Found>) => {
-    const cur = store.current[k];
-    if (!cur) return;
-    store.current[k] = { ...cur, ...patch };
-    setItems({ ...store.current });
+  const celebrate = useCallback((f: Found) => {
+    if (f.status !== 'pick' && f.status !== 'missing') return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    const t: Toast = { key: f.key, text: `${f.status === 'pick' ? '★' : '◆'} ${f.title}`, tone: f.status === 'pick' ? colors.gold : colors.missing };
+    setToasts((cur) => [...cur.filter((x) => x.key !== t.key), t].slice(-3));
+    setTimeout(() => setToasts((cur) => cur.filter((x) => x.key !== t.key)), 2600);
   }, []);
+
+  const update = useCallback(
+    (k: string, patch: Partial<Found>) => {
+      const cur = store.current[k];
+      if (!cur) return;
+      let next = { ...cur, ...patch };
+      // the same book read in another frame (or another block): keep one entry
+      if (patch.title && DONE.includes(next.status) && next.status !== 'noise') {
+        const twin = Object.values(store.current).find((o) => o.key !== k && o.status !== 'noise' && sameBook(o, next));
+        if (twin) next = { ...next, status: 'noise' };
+      }
+      store.current[k] = next;
+      setItems({ ...store.current });
+      if (next.status !== cur.status) celebrate(next);
+    },
+    [celebrate],
+  );
+
+  /** An extra book found inside one camera text (several spines read as one block). */
+  const addBook = useCallback(
+    (from: Found, patch: Partial<Found>) => {
+      if (Object.values(store.current).some((o) => o.status !== 'noise' && sameBook(o, patch))) return;
+      const key = `s${counter.current}`;
+      const f: Found = { key, text: from.text, tokens: new Set(), status: 'reading', order: counter.current++ };
+      store.current[key] = f;
+      update(key, patch);
+    },
+    [update],
+  );
 
   /** Same spine seen again (OCR text varies frame to frame) → reuse its entry. */
   const findSame = (tokens: Set<string>): string | null => {
@@ -127,8 +173,10 @@ export default function SessionFinder({ onSnapshot }: { onSnapshot: () => void }
           const f = fresh[i];
           if (b.status === 'owned' || b.status === 'missing' || b.status === 'flagged') {
             update(f.key, { status: b.status, title: b.title, author: b.author, note: b.note, bookId: b.book_id });
+            if (b.more) unknown.push(f); // the block runs on into neighbouring spines
           } else if (b.status === 'pick') {
             update(f.key, { status: 'pick', title: b.title, author: b.author, note: b.note, stars: 5, bookId: b.book_id });
+            if (b.more) unknown.push(f);
           } else {
             update(f.key, { status: 'scouting' });
             unknown.push(f);
@@ -146,39 +194,43 @@ export default function SessionFinder({ onSnapshot }: { onSnapshot: () => void }
         setCost((c) => c + (r.usage?.cost_usd || 0));
         setLastScout(Date.now() - t0);
         const got = new Set<number>();
+        const asPatch = (x: any): Partial<Found> =>
+          x.owned_id
+            ? { status: 'owned', title: x.title, author: x.author, bookId: x.owned_id, note: 'Already in your library' }
+            : x.gap
+              ? { status: 'missing', title: x.title, author: x.author, note: `Completes ${x.gap.collection} · vol. ${x.gap.index}` }
+              : {
+                  status: x.stars >= 4 || x.collectible ? 'pick' : 'book',
+                  title: x.title,
+                  author: x.author,
+                  stars: x.stars,
+                  note: x.reason,
+                  collectible: !!x.collectible,
+                  collectibleWhy: x.collectible_why,
+                  priceSeen: x.price_seen,
+                  friendsOwn: x.friends_own,
+                };
         r.results.forEach((x: any) => {
           const f = unknown[x.id];
           if (!f) return;
           got.add(x.id);
-          if (x.flagged) return update(f.key, { status: 'flagged', note: 'Text looked like instructions to an AI — ignored.' });
-          if (!x.is_book) return update(f.key, { status: 'noise' });
-          if (x.owned_id) return update(f.key, { status: 'owned', title: x.title, author: x.author, bookId: x.owned_id, note: 'Already in your library' });
-          if (x.gap)
-            return update(f.key, {
-              status: 'missing',
-              title: x.title,
-              author: x.author,
-              note: `Completes ${x.gap.collection} · vol. ${x.gap.index}`,
-            });
-          update(f.key, {
-            status: x.stars >= 4 || x.collectible ? 'pick' : 'book',
-            title: x.title,
-            author: x.author,
-            stars: x.stars,
-            note: x.reason,
-            collectible: !!x.collectible,
-            collectibleWhy: x.collectible_why,
-            priceSeen: x.price_seen,
-            friendsOwn: x.friends_own,
+          const already = DONE.includes(store.current[f.key]?.status) && store.current[f.key]?.status !== 'noise';
+          if (x.flagged) return already ? undefined : update(f.key, { status: 'flagged', note: 'Text looked like instructions to an AI — ignored.' });
+          const books: any[] = x.books?.length ? x.books : x.is_book && x.title ? [x] : [];
+          if (!books.length) return already ? undefined : update(f.key, { status: 'noise' });
+          books.forEach((bk, j) => {
+            const patch = { ...asPatch(bk), priceSeen: x.price_seen };
+            if (j === 0 && !already) update(f.key, patch);
+            else addBook(f, patch);
           });
         });
-        unknown.forEach((f, i) => !got.has(i) && update(f.key, { status: 'noise' }));
+        unknown.forEach((f, i) => !got.has(i) && store.current[f.key]?.status === 'scouting' && update(f.key, { status: 'noise' }));
       } catch (e: any) {
-        unknown.forEach((f) => update(f.key, { status: 'noise' }));
+        unknown.forEach((f) => store.current[f.key]?.status === 'scouting' && update(f.key, { status: 'noise' }));
         setError(e?.message || 'Scouts unavailable');
       }
     },
-    [update],
+    [update, addBook],
   );
 
   // capture loop — runs only while recording
@@ -194,6 +246,7 @@ export default function SessionFinder({ onSnapshot }: { onSnapshot: () => void }
           if (!pic?.uri || !alive) break;
           const ocr = await readShelf(pic.uri, { fast: true });
           setFrames((n) => n + 1);
+          setInView(ocr.blocks.length);
           handleTexts(ocr.blocks.map((b) => b.text)); // don't wait: keep sweeping
         } catch (e: any) {
           setError(e?.message || 'Camera error');
@@ -282,6 +335,19 @@ export default function SessionFinder({ onSnapshot }: { onSnapshot: () => void }
               Press record, then sweep slowly along the shelves.
             </Italic>
           )}
+        </View>
+        {recording && <Beam />}
+        {recording && (
+          <View style={s.inView} pointerEvents="none">
+            <Caps color={colors.gold} style={{ fontSize: 8.5 }}>{`${inView} spine${inView === 1 ? '' : 's'} in view`}</Caps>
+          </View>
+        )}
+        <View style={s.toasts} pointerEvents="none">
+          {toasts.map((t) => (
+            <Animated.View key={t.key} entering={FadeInDown.duration(300)} exiting={FadeOut.duration(400)} style={[s.toast, { borderColor: t.tone }]}>
+              <Text numberOfLines={1} style={[s.toastText, { color: t.tone }]}>{t.text}</Text>
+            </Animated.View>
+          ))}
         </View>
         {/* progress ring + record button */}
         <View style={s.controls}>
@@ -454,6 +520,26 @@ function Ring({ pct }: { pct: number }) {
   );
 }
 
+/** A sliver of light sweeping across the shelf while recording. */
+function Beam() {
+  const { width } = useWindowDimensions();
+  const x = useSharedValue(0);
+  useEffect(() => {
+    x.value = withRepeat(withTiming(1, { duration: 2200 }), -1, true);
+  }, []);
+  const st = useAnimatedStyle(() => ({ transform: [{ translateX: x.value * (width - 60) }] }));
+  return (
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { width: 60 }, st]}>
+      <LinearGradient
+        colors={['rgba(242,181,58,0)', 'rgba(242,181,58,0.16)', 'rgba(247,200,99,0.42)', 'rgba(242,181,58,0.16)', 'rgba(242,181,58,0)']}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={{ flex: 1 }}
+      />
+    </Animated.View>
+  );
+}
+
 function RecDot() {
   const o = useSharedValue(1);
   useEffect(() => {
@@ -464,6 +550,10 @@ function RecDot() {
 }
 
 const s = StyleSheet.create({
+  inView: { position: 'absolute', top: 70, right: 14, backgroundColor: 'rgba(5,13,26,0.6)', paddingHorizontal: 8, paddingVertical: 4 },
+  toasts: { position: 'absolute', left: 14, right: 14, bottom: 100, gap: 6, alignItems: 'flex-start' },
+  toast: { backgroundColor: 'rgba(5,13,26,0.82)', borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6, maxWidth: '90%' },
+  toastText: { fontFamily: fonts.display, fontSize: 15 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30 },
   controls: { position: 'absolute', bottom: 14, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly' },
   rec: { width: 74, height: 74, borderRadius: 37, borderWidth: 2, borderColor: colors.cream, alignItems: 'center', justifyContent: 'center' },

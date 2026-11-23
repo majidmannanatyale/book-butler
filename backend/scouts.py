@@ -25,7 +25,7 @@ from pydantic_ai.usage import UsageLimits
 import audit
 import library
 from agents import PROMPTS, looks_like_injection
-from live import _coverage, _plausible, _tokens
+from live import _ocr_support, _plausible, _tokens
 from llm import Meter, build_model
 
 _PRICE = re.compile(r"[$£€]\s?\d{1,4}(?:[.,]\d{2})?")
@@ -35,15 +35,19 @@ MAX_SCOUTS = 12      # parallel agents per request
 CACHE_DAYS = 14
 
 
-class ScoutItem(BaseModel):
-    id: int
-    is_book: bool = True
-    title: str = Field(default="", max_length=200)
+class ScoutBook(BaseModel):
+    title: str = Field(max_length=200)
     author: str = Field(default="", max_length=120)
     stars: int = Field(default=1, ge=1, le=5)
     reason: str = Field(default="", max_length=120)
     collectible: bool = False
     collectible_why: str = Field(default="", max_length=90)
+
+
+class ScoutItem(BaseModel):
+    id: int
+    # one camera text can run across several neighbouring spines: list every book it shows
+    books: list[ScoutBook] = Field(default_factory=list, max_length=5)
 
 
 class ScoutReport(BaseModel):
@@ -64,7 +68,7 @@ def _scout() -> Agent:
 
 
 def _key(text: str) -> str:
-    return f"scout|u{library.uid()}|" + " ".join(sorted(set(_tokens(text))))[:200]   # stars are per reader
+    return f"scout2|u{library.uid()}|" + " ".join(sorted(set(_tokens(text))))[:200]   # stars are per reader
 
 
 async def _run_scout(batch: list[dict], profile: str, meter: Meter, n: int) -> list[dict]:
@@ -78,11 +82,22 @@ async def _run_scout(batch: list[dict], profile: str, meter: Meter, n: int) -> l
         raw = texts.get(it.id)
         if raw is None:
             continue
-        ok = it.is_book and it.title and not looks_like_injection(it.reason) \
-            and _coverage(it.title, it.author, set(_tokens(raw)), library.norm(raw)) >= 0.6
-        out.append({"id": it.id, "is_book": bool(ok), "title": it.title if ok else "", "author": it.author if ok else "",
-                    "stars": it.stars if ok else 0, "reason": it.reason if ok else "",
-                    "collectible": bool(ok and it.collectible), "collectible_why": it.collectible_why if ok and it.collectible else ""})
+        books = []
+        for bk in it.books:
+            # the spine must actually show this title (OCR slips allowed, invented words not)
+            if not bk.title or looks_like_injection(bk.reason + " " + bk.title):
+                continue
+            if _ocr_support(bk.title, bk.author, raw) < 0.6:
+                continue
+            if any(library.similarity(bk.title, bk.author, b["title"], b["author"]) >= 0.85 for b in books):
+                continue
+            books.append({"title": bk.title, "author": bk.author, "stars": bk.stars, "reason": bk.reason,
+                          "collectible": bk.collectible, "collectible_why": bk.collectible_why if bk.collectible else ""})
+        first = books[0] if books else {}
+        out.append({"id": it.id, "is_book": bool(books), "books": books,
+                    "title": first.get("title", ""), "author": first.get("author", ""), "stars": first.get("stars", 0),
+                    "reason": first.get("reason", ""), "collectible": bool(first.get("collectible")),
+                    "collectible_why": first.get("collectible_why", "")})
     return out
 
 
@@ -129,16 +144,24 @@ async def scout_spines(blocks: list[dict], client_tag: str = "") -> dict:
         price = _PRICE.search(b.get("text", ""))
         if price:
             r = {**r, "price_seen": price.group(0).replace(" ", "")}   # a price sticker the camera read
-        if r.get("is_book") and r.get("title"):
-            fr = accounts.friends_owning(r["title"], r.get("author"), library.uid())
+        legacy = [{k: r.get(k) for k in ("title", "author", "stars", "reason", "collectible", "collectible_why")}] \
+            if r.get("is_book") and r.get("title") else []
+        books = []
+        for bk in (r.get("books") or legacy):
+            bk = dict(bk)
+            fr = accounts.friends_owning(bk["title"], bk.get("author"), library.uid())
             if fr:
-                r = {**r, "friends_own": fr}
-            hit, _ = library.match_owned(r["title"], r.get("author"), owned)
+                bk["friends_own"] = fr
+            hit, _ = library.match_owned(bk["title"], bk.get("author"), owned)
             if hit:
-                r = {**r, "owned_id": hit["id"]}
-            gap = library.gap_for(r["title"], r.get("author"))
+                bk["owned_id"] = hit["id"]
+            gap = library.gap_for(bk["title"], bk.get("author"))
             if gap:
-                r = {**r, "gap": gap}
+                bk["gap"] = gap
+            books.append(bk)
+        if books:
+            # top-level fields mirror the first book (older app builds read only these)
+            r = {**r, **books[0], "books": books}
         out.append(r)
 
     usage = meter.as_dict()

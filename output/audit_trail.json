@@ -2519,5 +2519,433 @@
         }
       }
     }
+  },
+  {
+    "timestamp": "2026-11-23T07:57:21+00:00",
+    "kind": "scout_team",
+    "client": "",
+    "spines": 14,
+    "new": 11,
+    "scouts": 6,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 4294,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 681,
+      "requests": 6,
+      "cost_usd": 0.00077,
+      "by_agent": {
+        "scout_5": {
+          "input_tokens": 693,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 65,
+          "requests": 1
+        },
+        "scout_0": {
+          "input_tokens": 745,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 111,
+          "requests": 1
+        },
+        "scout_3": {
+          "input_tokens": 711,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 124,
+          "requests": 1
+        },
+        "scout_4": {
+          "input_tokens": 722,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 110,
+          "requests": 1
+        },
+        "scout_1": {
+          "input_tokens": 704,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 106,
+          "requests": 1
+        },
+        "scout_2": {
+          "input_tokens": 719,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 165,
+          "requests": 1
+        }
+      }
+    },
+    "timings": {
+      "total": 4.64,
+      "scouts": 6
+    }
+  },
+  {
+    "timestamp": "2026-11-23T07:58:37+00:00",
+    "kind": "scout_team",
+    "client": "",
+    "spines": 14,
+    "new": 11,
+    "scouts": 6,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 4942,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 718,
+      "requests": 6,
+      "cost_usd": 0.000853,
+      "by_agent": {
+        "scout_5": {
+          "input_tokens": 801,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 97,
+          "requests": 1
+        },
+        "scout_1": {
+          "input_tokens": 812,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 67,
+          "requests": 1
+        },
+        "scout_3": {
+          "input_tokens": 819,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 111,
+          "requests": 1
+        },
+        "scout_0": {
+          "input_tokens": 853,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 148,
+          "requests": 1
+        },
+        "scout_4": {
+          "input_tokens": 830,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 138,
+          "requests": 1
+        },
+        "scout_2": {
+          "input_tokens": 827,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 157,
+          "requests": 1
+        }
+      }
+    },
+    "timings": {
+      "total": 3.84,
+      "scouts": 6
+    }
+  },
+  {
+    "timestamp": "2026-11-23T07:59:43+00:00",
+    "kind": "scout_team",
+    "client": "",
+    "spines": 14,
+    "new": 11,
+    "scouts": 6,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 4942,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 698,
+      "requests": 6,
+      "cost_usd": 0.000843,
+      "by_agent": {
+        "scout_1": {
+          "input_tokens": 812,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 67,
+          "requests": 1
+        },
+        "scout_5": {
+          "input_tokens": 801,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 63,
+          "requests": 1
+        },
+        "scout_4": {
+          "input_tokens": 830,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 136,
+          "requests": 1
+        },
+        "scout_3": {
+          "input_tokens": 819,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 96,
+          "requests": 1
+        },
+        "scout_0": {
+          "input_tokens": 853,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 187,
+          "requests": 1
+        },
+        "scout_2": {
+          "input_tokens": 827,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 149,
+          "requests": 1
+        }
+      }
+    },
+    "timings": {
+      "total": 4.26,
+      "scouts": 6
+    }
+  },
+  {
+    "timestamp": "2026-11-23T07:59:50+00:00",
+    "kind": "scout_team",
+    "client": "",
+    "spines": 12,
+    "new": 10,
+    "scouts": 5,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 4187,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 848,
+      "requests": 5,
+      "cost_usd": 0.000843,
+      "by_agent": {
+        "scout_1": {
+          "input_tokens": 812,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 104,
+          "requests": 1
+        },
+        "scout_3": {
+          "input_tokens": 829,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 99,
+          "requests": 1
+        },
+        "scout_2": {
+          "input_tokens": 812,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 165,
+          "requests": 1
+        },
+        "scout_4": {
+          "input_tokens": 865,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 199,
+          "requests": 1
+        },
+        "scout_0": {
+          "input_tokens": 869,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 281,
+          "requests": 1
+        }
+      }
+    },
+    "timings": {
+      "total": 4.33,
+      "scouts": 5
+    }
+  },
+  {
+    "timestamp": "2026-11-23T08:00:09+00:00",
+    "kind": "scout_team",
+    "client": "",
+    "spines": 14,
+    "new": 11,
+    "scouts": 6,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 4942,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 716,
+      "requests": 6,
+      "cost_usd": 0.000852,
+      "by_agent": {
+        "scout_1": {
+          "input_tokens": 812,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 63,
+          "requests": 1
+        },
+        "scout_5": {
+          "input_tokens": 801,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 99,
+          "requests": 1
+        },
+        "scout_3": {
+          "input_tokens": 819,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 99,
+          "requests": 1
+        },
+        "scout_4": {
+          "input_tokens": 830,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 136,
+          "requests": 1
+        },
+        "scout_2": {
+          "input_tokens": 827,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 176,
+          "requests": 1
+        },
+        "scout_0": {
+          "input_tokens": 853,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 143,
+          "requests": 1
+        }
+      }
+    },
+    "timings": {
+      "total": 4.71,
+      "scouts": 6
+    }
+  },
+  {
+    "timestamp": "2026-11-23T08:00:19+00:00",
+    "kind": "scout_team",
+    "client": "",
+    "spines": 12,
+    "new": 10,
+    "scouts": 5,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 4187,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 769,
+      "requests": 5,
+      "cost_usd": 0.000803,
+      "by_agent": {
+        "scout_0": {
+          "input_tokens": 869,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 239,
+          "requests": 1
+        },
+        "scout_2": {
+          "input_tokens": 812,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 72,
+          "requests": 1
+        },
+        "scout_3": {
+          "input_tokens": 829,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 100,
+          "requests": 1
+        },
+        "scout_1": {
+          "input_tokens": 812,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 105,
+          "requests": 1
+        },
+        "scout_4": {
+          "input_tokens": 865,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 253,
+          "requests": 1
+        }
+      }
+    },
+    "timings": {
+      "total": 6.81,
+      "scouts": 5
+    }
+  },
+  {
+    "timestamp": "2026-11-23T08:01:44+00:00",
+    "kind": "scout_team",
+    "client": "",
+    "spines": 14,
+    "new": 0,
+    "scouts": 0,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 0,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 0,
+      "requests": 0,
+      "cost_usd": 0.0,
+      "by_agent": {}
+    },
+    "timings": {
+      "total": 0.74,
+      "scouts": 0
+    }
+  },
+  {
+    "timestamp": "2026-11-23T08:01:56+00:00",
+    "kind": "scout_team",
+    "client": "127.0.0.1",
+    "spines": 2,
+    "new": 1,
+    "scouts": 1,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 796,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 68,
+      "requests": 1,
+      "cost_usd": 0.000114,
+      "by_agent": {
+        "scout_0": {
+          "input_tokens": 796,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 68,
+          "requests": 1
+        }
+      }
+    },
+    "timings": {
+      "total": 2.44,
+      "scouts": 1
+    }
   }
 ]
