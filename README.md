@@ -22,6 +22,10 @@ The rest of the app:
 
 You need **Python 3.11+** and **Node 20+**.
 
+From a fresh clone to the app running in a browser takes about 3–5 minutes. Most of that is `pip install` and `npm install`.
+
+> **Windows:** clone into a short folder, such as `C:\Users\<you>\book-butler`, not a deep OneDrive folder. One package ships a deeply nested file, and `pip install` fails with "No such file or directory" if the full path goes over Windows' 260-character limit.
+
 ### 1. Keys
 
 The app reads `.env` from **this folder first, then the folder above it**. It uses:
@@ -43,7 +47,7 @@ pip install -r ..\requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8020
 ```
 
-Check it at http://localhost:8020/api/health. On first start it builds `data/library.db` from the small demo library in `data/seed_library.json`, which has 31 books and 6 collections.
+The first start takes about a minute while it builds the database and looks up covers. Then check it at http://localhost:8020/api/health. On first start it builds `data/library.db` from the small demo library in `data/seed_library.json`, which has 31 books and 6 collections.
 
 ### 3. The app
 
