@@ -24,12 +24,25 @@ export async function getBase(): Promise<string> {
   if (cached) return cached;
   const saved = await AsyncStorage.getItem(KEY);
   cached = (saved || defaultBase()).replace(/\/$/, '');
+  AsyncStorage.setItem('apiBaseResolved', cached).catch(() => {}); // for the home-screen widget
   return cached;
 }
 
 export async function setBase(url: string) {
   cached = url.trim().replace(/\/$/, '');
   await AsyncStorage.setItem(KEY, cached);
+}
+
+// ---------- sign-in token (none = the demo reader)
+let token: string | null | undefined;
+export async function getToken() {
+  if (token === undefined) token = await AsyncStorage.getItem('authToken');
+  return token;
+}
+export async function setToken(t: string | null) {
+  token = t;
+  if (t) await AsyncStorage.setItem('authToken', t);
+  else await AsyncStorage.removeItem('authToken');
 }
 
 export class ApiError extends Error {
@@ -42,13 +55,14 @@ export class ApiError extends Error {
 
 async function req<T>(path: string, init?: RequestInit, timeoutMs = 90000): Promise<T> {
   const base = await getBase();
+  const tk = await getToken();
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(`${base}${path}`, {
       ...init,
       signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+      headers: { 'Content-Type': 'application/json', ...(tk ? { Authorization: `Bearer ${tk}` } : {}), ...(init?.headers || {}) },
     });
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;
@@ -167,6 +181,16 @@ export type Draft = {
   pages?: number;
 };
 
+export type Profile = {
+  id: number;
+  username: string;
+  display_name: string;
+  friend_code: string;
+  bio: string;
+  reader_type: string | null;
+  reader_type_label: string | null;
+};
+
 export type Explanation = {
   headline: string;
   connections: { your_book: string; why: string }[];
@@ -250,6 +274,29 @@ export const api = {
       { method: 'POST', body: JSON.stringify(imgs) },
       90000,
     ),
+  readerTypes: () => req<{ key: string; label: string; blurb: string }[]>('/api/reader-types'),
+  register: (b: { username: string; password: string; display_name: string; reader_type?: string }) =>
+    req<{ token: string; user: Profile }>('/api/auth/register', { method: 'POST', body: JSON.stringify(b) }),
+  login: (username: string, password: string) =>
+    req<{ token: string; user: Profile }>('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  me: () => req<Profile & { stats: Stats; signed_in: boolean }>('/api/me'),
+  patchMe: (b: Partial<{ display_name: string; bio: string; reader_type: string }>) =>
+    req<Profile>('/api/me', { method: 'PATCH', body: JSON.stringify(b) }),
+  friends: () => req<(Profile & { books: number; reading_now: number })[]>('/api/friends'),
+  addFriend: (code: string) => req<Profile>('/api/friends', { method: 'POST', body: JSON.stringify({ code }) }),
+  friendShelf: (id: number) => req<{ user: Profile; stats: Stats; books: Book[] }>(`/api/friends/${id}`),
+  importCsv: (csv: string) =>
+    req<{ source: string; rows: number; added: number; skipped_duplicates: number; wishlist: number; sample: string[] }>(
+      '/api/import',
+      { method: 'POST', body: JSON.stringify({ csv }) },
+      120000,
+    ),
+  where: (title: string, author: string) =>
+    req<{ links: { name: string; kind: string; url: string }[]; friends: string[] }>(
+      `/api/where?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}`,
+    ),
+  nearby: (lat: number, lon: number) =>
+    req<{ shops: { name: string; kind: string; km: number; address: string; maps: string }[] }>(`/api/nearby?lat=${lat}&lon=${lon}`, undefined, 40000),
   usage: () => req<any>('/api/usage'),
   audit: () => req<any[]>('/api/audit?n=25'),
 };

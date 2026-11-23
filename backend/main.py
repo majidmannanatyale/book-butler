@@ -22,7 +22,10 @@ from pydantic import BaseModel, Field
 
 import agents
 import live
+import accounts
 import extras
+import importer
+import shopping
 import scouts
 import spines
 import audit
@@ -31,10 +34,26 @@ from config import APP_NAME, DAILY_BUDGET_USD, DATA_DIR, MODEL_NAME, ROOT, SCAN_
 from llm import providers_available
 
 library.init_db()
+accounts.ensure_columns()
+accounts.ensure_seed()
 QUOTES = json.loads((DATA_DIR / "quotes.json").read_text(encoding="utf-8"))
 
 app = FastAPI(title=f"{APP_NAME} API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# ------------------------------------------------------------------ who's asking
+
+@app.middleware("http")
+async def who(request: Request, call_next):
+    """Bearer token -> the reader whose shelf this request works on (default: the demo reader)."""
+    auth = request.headers.get("authorization", "")
+    user = accounts.read_token(auth[7:] if auth.lower().startswith("bearer ") else None) or 1
+    token = library.current_user.set(user)
+    try:
+        return await call_next(request)
+    finally:
+        library.current_user.reset(token)
+
 
 # ------------------------------------------------------------- guard rails
 
@@ -166,8 +185,8 @@ def create_book(body: BookIn):
 @app.get("/api/books/{book_id}/spine.png")
 def book_spine(book_id: int):
     """Spine artwork for the 3D bookshelf (cloth + gold-foil type), cached in memory."""
-    b = library.get_book(book_id)
-    if not b:
+    b = library.get_book_any(book_id)
+    if not b or (b.get("user_id") != library.uid() and not accounts.is_friend(library.uid(), b.get("user_id"))):
         raise HTTPException(404, "No such book.")
     png = spines.spine_png(b["title"], b.get("author") or "")
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
@@ -408,6 +427,131 @@ async def book_sample(book_id: int):
 async def sample_by_title(title: str, author: str = ""):
     import asyncio as _a
     return await _a.to_thread(extras.sample_for, {"title": title, "author": author})
+
+
+# ------------------------------------------------------------------ accounts
+
+class RegisterIn(BaseModel):
+    username: str = Field(min_length=3, max_length=24)
+    password: str = Field(min_length=8, max_length=200)
+    display_name: str = Field(default="", max_length=40)
+    reader_type: str | None = None
+
+
+class LoginIn(BaseModel):
+    username: str = Field(min_length=1, max_length=24)
+    password: str = Field(min_length=1, max_length=200)
+
+
+@app.get("/api/reader-types")
+def reader_types():
+    return [{"key": k, "label": v[0], "blurb": v[1]} for k, v in accounts.READER_TYPES.items()]
+
+
+@app.post("/api/auth/register")
+def register(request: Request, body: RegisterIn):
+    _rate_limit(request, per_minute=5)
+    try:
+        u = accounts.register(body.username, body.password, body.display_name, body.reader_type)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    audit.append({"kind": "register", "user": u["id"]})
+    return {"token": accounts.make_token(u["id"]), "user": u}
+
+
+@app.post("/api/auth/login")
+def login(request: Request, body: LoginIn):
+    _rate_limit(request, per_minute=10)
+    u = accounts.login(body.username, body.password)
+    if not u:
+        audit.append({"kind": "blocked", "reason": "bad_login"})
+        raise HTTPException(401, "That username and password don't match.")
+    return {"token": accounts.make_token(u["id"]), "user": u}
+
+
+@app.get("/api/me")
+def me():
+    u = accounts.get_user(library.uid())
+    return {**(u or {}), "stats": library.stats(), "signed_in": library.uid() != 1}
+
+
+class ProfileIn(BaseModel):
+    display_name: str | None = Field(default=None, max_length=40)
+    bio: str | None = Field(default=None, max_length=200)
+    reader_type: str | None = None
+
+
+@app.patch("/api/me")
+def patch_me(body: ProfileIn):
+    u = accounts.update_profile(library.uid(), body.display_name, body.bio)
+    if body.reader_type:
+        try:
+            u = accounts.set_reader_type(library.uid(), body.reader_type)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+    return u
+
+
+class FriendIn(BaseModel):
+    code: str = Field(min_length=4, max_length=12)
+
+
+@app.get("/api/friends")
+def friends():
+    return accounts.friends(library.uid())
+
+
+@app.post("/api/friends")
+def add_friend(request: Request, body: FriendIn):
+    _rate_limit(request, per_minute=10)
+    try:
+        return accounts.add_friend(library.uid(), body.code)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/friends/{friend_id}")
+def friend_shelf(friend_id: int):
+    """A friend's bookcase — read-only, and only for actual friends."""
+    if not accounts.is_friend(library.uid(), friend_id):
+        raise HTTPException(403, "You can only see the shelves of your friends.")
+    return {"user": accounts.get_user(friend_id), "stats": library.stats(user_id=friend_id),
+            "books": library.list_books("owned", user_id=friend_id)}
+
+
+@app.get("/api/friends-own")
+def friends_own(title: str, author: str = ""):
+    return {"friends": accounts.friends_owning(title, author, library.uid())}
+
+
+# ------------------------------------------------------------------ import
+
+class ImportIn(BaseModel):
+    csv: str = Field(min_length=10, max_length=8_000_000)
+
+
+@app.post("/api/import")
+def import_csv(request: Request, body: ImportIn):
+    """Goodreads or Libib CSV export -> your library (no AI, $0)."""
+    _rate_limit(request, per_minute=5)
+    try:
+        return importer.import_csv(body.csv)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+# ------------------------------------------------------------------ finding books
+
+@app.get("/api/where")
+def where(title: str, author: str = "", isbn: str = ""):
+    return {"links": shopping.where_to_buy(title, author, isbn),
+            "friends": accounts.friends_owning(title, author, library.uid())}
+
+
+@app.get("/api/nearby")
+async def nearby(lat: float, lon: float):
+    import asyncio as _a
+    return {"shops": await _a.to_thread(shopping.nearby_bookshops, lat, lon)}
 
 
 class DebugOcrIn(BaseModel):

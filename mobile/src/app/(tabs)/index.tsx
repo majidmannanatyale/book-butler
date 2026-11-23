@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 
 import WindowLight from '@/components/WindowLight';
+import { refreshWidget } from '@/widget/refresh';
 import BookCover from '@/components/BookCover';
 import { Caps, Italic, Ornament, Rule, tap } from '@/components/ui';
 import { api, Book, Stats } from '@/api';
@@ -19,13 +20,23 @@ export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [reading, setReading] = useState<Book[]>([]);
   const [offline, setOffline] = useState(false);
+  const [name, setName] = useState('');
 
   const load = useCallback(async () => {
     try {
-      const [q, st, books] = await Promise.all([api.quote(), api.stats(), api.books('owned')]);
+      const [q, st, books, me] = await Promise.all([api.quote(), api.stats(), api.books('owned'), api.me().catch(() => null)]);
       setQuote(q);
       setStats(st);
       setReading(books.filter((b) => b.reading));
+      setName(me?.signed_in ? me.display_name.split(' ')[0] : '');
+      const r = books.find((b) => b.reading);
+      refreshWidget({
+        name: 'The Book Butler',
+        reading: r ? { title: r.title, author: r.author, progress: r.progress || 0 } : null,
+        books: st.books,
+        hours: Math.round(st.hours_read),
+        toFind: st.missing_from_collections,
+      });
       setOffline(false);
     } catch {
       setOffline(true);
@@ -52,7 +63,7 @@ export default function Home() {
     <View style={{ flex: 1 }}>
       <WindowLight />
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 28, paddingBottom: 40, paddingHorizontal: 28 }}>
-        <Caps style={{ textAlign: 'center' }}>{APP_NAME}</Caps>
+        <Caps style={{ textAlign: 'center' }}>{name ? `${greeting()}, ${name}` : APP_NAME}</Caps>
         <Rule style={{ width: 28, alignSelf: 'center', marginTop: 10, backgroundColor: colors.sepia }} />
 
         {/* The quote: italic serif with a script initial, like an illuminated page */}
@@ -155,6 +166,11 @@ function CountUp({ value, style }: { value: number; style: any }) {
     return () => cancelAnimationFrame(raf);
   }, [value]);
   return <Text style={style}>{n}</Text>;
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 5 ? 'Up late' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
 
 const s = StyleSheet.create({

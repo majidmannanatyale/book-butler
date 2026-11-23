@@ -43,6 +43,10 @@ type Found = {
   bookId?: number;
   order: number;
   saved?: 'owned' | 'wishlist';
+  collectible?: boolean;
+  collectibleWhy?: string;
+  priceSeen?: string;
+  friendsOwn?: string[];
 };
 
 const words = (t: string) =>
@@ -156,7 +160,17 @@ export default function SessionFinder({ onSnapshot }: { onSnapshot: () => void }
               author: x.author,
               note: `Completes ${x.gap.collection} · vol. ${x.gap.index}`,
             });
-          update(f.key, { status: x.stars >= 4 ? 'pick' : 'book', title: x.title, author: x.author, stars: x.stars, note: x.reason });
+          update(f.key, {
+            status: x.stars >= 4 || x.collectible ? 'pick' : 'book',
+            title: x.title,
+            author: x.author,
+            stars: x.stars,
+            note: x.reason,
+            collectible: !!x.collectible,
+            collectibleWhy: x.collectible_why,
+            priceSeen: x.price_seen,
+            friendsOwn: x.friends_own,
+          });
         });
         unknown.forEach((f, i) => !got.has(i) && update(f.key, { status: 'noise' }));
       } catch (e: any) {
@@ -320,7 +334,18 @@ export default function SessionFinder({ onSnapshot }: { onSnapshot: () => void }
             disabled={!f.title || !['pick', 'book', 'missing'].includes(f.status)}
             onPress={() => {
               tap();
-              router.push({ pathname: '/pick', params: { title: f.title || '', author: f.author || '', stars: String(f.stars || 3), reason: f.note || '' } });
+              router.push({
+                pathname: '/pick',
+                params: {
+                  title: f.title || '',
+                  author: f.author || '',
+                  stars: String(f.stars || 3),
+                  reason: f.note || '',
+                  collectible: f.collectible ? '1' : '',
+                  why: f.collectibleWhy || '',
+                  price: f.priceSeen || '',
+                },
+              });
             }}
             accessibilityHint="Shows why this book was recommended"
             style={[s.row, f.status === 'pick' && s.rowPick]}
@@ -335,6 +360,10 @@ export default function SessionFinder({ onSnapshot }: { onSnapshot: () => void }
               </Text>
               {!!f.author && <Text numberOfLines={1} style={s.author}>{f.author}</Text>}
               {(f.status === 'pick' || f.status === 'book') && !!f.stars && <Stars n={f.stars} size={11} />}
+              {f.collectible && (
+                <Caps color={colors.gold} style={{ fontSize: 8.5, marginTop: 3 }}>{`◆ Possibly valuable${f.priceSeen ? ` · sticker ${f.priceSeen}` : ''}`}</Caps>
+              )}
+              {!!f.friendsOwn?.length && <Caps color={colors.owned} style={{ fontSize: 8.5, marginTop: 3 }}>{`${f.friendsOwn.join(' & ')} owns this`}</Caps>}
               {!!f.note && f.status !== 'scouting' && (
                 <Text numberOfLines={2} style={s.note}>
                   {f.note}

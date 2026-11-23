@@ -153,7 +153,7 @@ def _explainer() -> Agent:
 
 
 async def explain_pick(title: str, author: str, stars: int, reason: str) -> dict:
-    key = f"explain|{library.norm(title)}|{library.norm(author)}|{library.stats()['books']}"
+    key = f"explain|u{library.uid()}|{library.norm(title)}|{library.norm(author)}|{library.stats()['books']}"
     cached = library._cache_get(key, max_age=14 * 86400)
     meta = (library.ol_search(title=title, author=author, limit=1) or [{}])[0]
     if cached is not None:

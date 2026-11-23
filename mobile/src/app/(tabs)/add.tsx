@@ -9,11 +9,12 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import BookCover from '@/components/BookCover';
 import GuidedCamera from '@/components/GuidedCamera';
+import ImportPanel from '@/components/ImportPanel';
 import { Button, Caps, Chip, Display, ErrorNote, Italic, Rule, tap } from '@/components/ui';
 import { api, Draft, money, SearchHit } from '@/api';
 import { colors, fonts } from '@/theme';
 
-type Mode = 'camera' | 'search' | 'isbn' | 'manual';
+type Mode = 'camera' | 'search' | 'isbn' | 'import' | 'manual';
 
 export default function Add() {
   const insets = useSafeAreaInsets();
@@ -27,12 +28,14 @@ export default function Add() {
           <Chip label="Camera" active={mode === 'camera'} onPress={() => setMode('camera')} />
           <Chip label="Search" active={mode === 'search'} onPress={() => setMode('search')} />
           <Chip label="ISBN" active={mode === 'isbn'} onPress={() => setMode('isbn')} />
+          <Chip label="Import" active={mode === 'import'} onPress={() => setMode('import')} />
           <Chip label="By hand" active={mode === 'manual'} onPress={() => setMode('manual')} />
         </ScrollView>
         <Rule style={{ marginBottom: 14 }} />
         {mode === 'search' && <SearchMode />}
         {mode === 'isbn' && <IsbnMode />}
         {mode === 'camera' && <CameraMode />}
+        {mode === 'import' && <ImportPanel />}
         {mode === 'manual' && <DraftForm initial={{}} />}
       </ScrollView>
     </KeyboardAvoidingView>

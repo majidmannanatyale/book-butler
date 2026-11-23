@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Working Title",
+    "name": "The Book Butler",
     "slug": "book-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -56,6 +56,46 @@
           "android": {
             "minSdkVersion": 26
           }
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to hear your questions for the Librarian.",
+          "speechRecognitionPermission": "Allow $(PRODUCT_NAME) to turn your voice into text.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to find bookshops near you.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/cormorant-garamond/500Medium/CormorantGaramond_500Medium.ttf",
+            "./node_modules/@expo-google-fonts/eb-garamond/400Regular_Italic/EBGaramond_400Regular_Italic.ttf"
+          ],
+          "widgets": [
+            {
+              "name": "ReadingWidget",
+              "label": "The Book Butler \u2014 reading now",
+              "description": "What you are reading, and your collection at a glance",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000,
+              "widgetCategory": "home_screen"
+            }
+          ]
         }
       ]
     ],

@@ -130,7 +130,8 @@ def _hamming(a: str, b: str) -> int:
 
 def cached_scan(h: str, max_age_s: float = 6 * 3600) -> dict | None:
     with library.db() as con:
-        rows = con.execute("SELECT dhash, result, created_at FROM scan_cache ORDER BY id DESC LIMIT 200").fetchall()
+        rows = con.execute("SELECT dhash, result, created_at FROM scan_cache WHERE user_id=? ORDER BY id DESC LIMIT 200",
+                           (library.uid(),)).fetchall()
     for r in rows:
         if time.time() - r["created_at"] < max_age_s and _hamming(h, r["dhash"]) <= SCAN_CACHE_HAMMING:
             return json.loads(r["result"])
@@ -139,8 +140,8 @@ def cached_scan(h: str, max_age_s: float = 6 * 3600) -> dict | None:
 
 def store_scan(h: str, result: dict) -> None:
     with library.db() as con:
-        con.execute("INSERT INTO scan_cache(dhash, result, created_at) VALUES (?,?,?)",
-                    (h, json.dumps(result), time.time()))
+        con.execute("INSERT INTO scan_cache(dhash, result, created_at, user_id) VALUES (?,?,?,?)",
+                    (h, json.dumps(result), time.time(), library.uid()))
 
 
 # --------------------------------------------------------- injection guard

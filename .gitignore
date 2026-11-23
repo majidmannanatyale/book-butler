@@ -19,3 +19,4 @@ data/library.db-*
 output/scans/
 output/debug/
 data/faces/
+data/.app_secret

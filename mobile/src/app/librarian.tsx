@@ -1,12 +1,13 @@
 // "Ask the Librarian" — a chat agent that reaches the collection only through
 // the library MCP server's tools (and can only ever add to the wishlist).
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 
 import { IconClose } from '@/components/Icons';
+import MicButton, { micAvailable } from '@/components/MicButton';
 import { Caps, Chip, Italic, Rule, tap } from '@/components/ui';
 import { api, money } from '@/api';
 import { colors, fonts } from '@/theme';
@@ -27,6 +28,8 @@ export default function Librarian() {
   const [busy, setBusy] = useState(false);
   const scroll = useRef<any>(null);
 
+  const askRef = useRef<(q: string) => void>(() => {});
+  const onVoiceFinal = useCallback((t: string) => askRef.current(t), []);
   const ask = async (q: string) => {
     const question = q.trim();
     if (!question || busy) return;
@@ -45,6 +48,8 @@ export default function Librarian() {
     setBusy(false);
     setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
   };
+
+  askRef.current = ask;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -78,11 +83,12 @@ export default function Librarian() {
         {busy && <Italic style={{ fontSize: 15 }}>The librarian is checking the shelves…</Italic>}
       </ScrollView>
       <View style={[s.inputRow, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <MicButton onPartial={setText} onFinal={onVoiceFinal} />
         <TextInput
           value={text}
           onChangeText={setText}
           onSubmitEditing={() => ask(text)}
-          placeholder="Ask the librarian…"
+          placeholder={micAvailable() ? 'Ask — or tap the mic and speak…' : 'Ask the librarian…'}
           placeholderTextColor={colors.sepiaSoft}
           style={s.input}
           returnKeyType="send"

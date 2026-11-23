@@ -209,7 +209,7 @@ function Rig({ rows, selected }: { rows: number; selected: boolean }) {
   return null;
 }
 
-export default function Shelf3D({ books, base, onOpen }: { books: Book[]; base: string; onOpen: (id: number) => void }) {
+export default function Shelf3D({ books, base, onOpen, readOnly = false }: { books: Book[]; base: string; onOpen: (id: number) => void; readOnly?: boolean }) {
   const [sel, setSel] = useState<number | null>(null);
   const { placed, rows } = useMemo(() => layout(books), [books]);
   const chosen = books.find((b) => b.id === sel);
@@ -252,9 +252,11 @@ export default function Shelf3D({ books, base, onOpen }: { books: Book[]; base: 
             {chosen.title}
           </Text>
           <Text style={s.meta}>{[chosen.year, chosen.edition, chosen.binding].filter(Boolean).join(' · ')}</Text>
-          <Pressable onPress={() => onOpen(chosen.id)} style={s.open} accessibilityRole="button">
-            <Caps style={{ color: colors.cream, fontSize: 10 }}>Open the showcase</Caps>
-          </Pressable>
+          {!readOnly && (
+            <Pressable onPress={() => onOpen(chosen.id)} style={s.open} accessibilityRole="button">
+              <Caps style={{ color: colors.cream, fontSize: 10 }}>Open the showcase</Caps>
+            </Pressable>
+          )}
         </Animated.View>
       ) : (
         <Animated.View entering={FadeIn.delay(1200)} style={s.hint} pointerEvents="none">

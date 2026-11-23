@@ -8,6 +8,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import BookCover from '@/components/BookCover';
 import SampleCard from '@/components/SampleCard';
+import FindIt from '@/components/FindIt';
 import Stars from '@/components/Stars';
 import { IconClose } from '@/components/Icons';
 import { Button, Caps, ErrorNote, Italic, Ornament, tap } from '@/components/ui';
@@ -15,7 +16,7 @@ import { api, Explanation, money } from '@/api';
 import { colors, fonts } from '@/theme';
 
 export default function Pick() {
-  const p = useLocalSearchParams<{ title: string; author: string; stars: string; reason: string; cover?: string }>();
+  const p = useLocalSearchParams<{ title: string; author: string; stars: string; reason: string; cover?: string; collectible?: string; why?: string; price?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const stars = Number(p.stars || 3);
@@ -106,6 +107,8 @@ export default function Pick() {
             )}
           </Animated.View>
         )}
+
+        <FindIt title={p.title} author={p.author || ''} collectible={p.collectible === '1'} collectibleWhy={p.why} priceSeen={p.price} />
 
         <Ornament dark />
         <SampleCard load={() => api.sampleByTitle(p.title, p.author || '')} />

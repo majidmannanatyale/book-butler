@@ -51,6 +51,8 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="book/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: colors.wall } }} />
           <Stack.Screen name="librarian" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="account" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="friend/[id]" options={{ animation: 'fade' }} />
           <Stack.Screen name="pick" options={{ presentation: 'modal', animation: 'slide_from_bottom', contentStyle: { backgroundColor: colors.wall } }} />
         </Stack>
       </SafeAreaProvider>

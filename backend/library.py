@@ -66,6 +66,21 @@ CREATE TABLE IF NOT EXISTS scan_cache (
   result TEXT NOT NULL,
   created_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  display_name TEXT NOT NULL,
+  pw_hash TEXT NOT NULL,
+  friend_code TEXT NOT NULL UNIQUE,
+  bio TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS friendships (
+  user_id INTEGER NOT NULL,
+  friend_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, friend_id)
+);
 CREATE TABLE IF NOT EXISTS usage_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ts REAL NOT NULL,
@@ -76,6 +91,15 @@ CREATE TABLE IF NOT EXISTS usage_log (
   detail TEXT
 );
 """
+
+from contextvars import ContextVar
+
+current_user: ContextVar[int] = ContextVar("current_user", default=1)
+
+
+def uid() -> int:
+    return current_user.get()
+
 
 BOOK_FIELDS = ("title", "author", "year", "publisher", "binding", "edition", "height_cm", "pages",
                "isbn", "cover_url", "subjects", "collection", "series_index", "status", "favourite",
@@ -109,6 +133,11 @@ def init_db(reset: bool = False) -> None:
         cols = {r[1] for r in con.execute("PRAGMA table_info(books)")}
         if "faces" not in cols:   # added later: which sides of the book the user photographed
             con.execute("ALTER TABLE books ADD COLUMN faces TEXT")
+        if "user_id" not in cols:  # added later: whose book this is (1 = the demo reader)
+            con.execute("ALTER TABLE books ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1")
+        scols = {r[1] for r in con.execute("PRAGMA table_info(scan_cache)")}
+        if "user_id" not in scols:
+            con.execute("ALTER TABLE scan_cache ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1")
         if reset:
             con.execute("DELETE FROM books")
             con.execute("DELETE FROM collections")
@@ -132,6 +161,7 @@ def _insert_book(con: sqlite3.Connection, b: dict) -> int:
     for k in ("favourite", "reading"):
         if k in row:
             row[k] = int(bool(row[k]))
+    row["user_id"] = b.get("user_id") or uid()
     cols = ",".join(row)
     cur = con.execute(f"INSERT INTO books({cols}) VALUES ({','.join('?' * len(row))})", tuple(row.values()))
     return int(cur.lastrowid)
@@ -152,16 +182,24 @@ def book_to_dict(r: sqlite3.Row) -> dict:
     return d
 
 
-def list_books(status: str | None = "owned") -> list[dict]:
+def list_books(status: str | None = "owned", user_id: int | None = None) -> list[dict]:
+    u = user_id or uid()
     with db() as con:
         if status:
-            rows = con.execute("SELECT * FROM books WHERE status=? ORDER BY position, id", (status,))
+            rows = con.execute("SELECT * FROM books WHERE status=? AND user_id=? ORDER BY position, id", (status, u))
         else:
-            rows = con.execute("SELECT * FROM books ORDER BY position, id")
+            rows = con.execute("SELECT * FROM books WHERE user_id=? ORDER BY position, id", (u,))
         return [book_to_dict(r) for r in rows]
 
 
 def get_book(book_id: int) -> dict | None:
+    with db() as con:
+        r = con.execute("SELECT * FROM books WHERE id=? AND user_id=?", (book_id, uid())).fetchone()
+        return book_to_dict(r) if r else None
+
+
+def get_book_any(book_id: int) -> dict | None:
+    """Any reader's book (callers must check ownership/friendship)."""
     with db() as con:
         r = con.execute("SELECT * FROM books WHERE id=?", (book_id,)).fetchone()
         return book_to_dict(r) if r else None
@@ -170,7 +208,7 @@ def get_book(book_id: int) -> dict | None:
 def add_book(data: dict) -> dict:
     with db() as con:
         if "position" not in data:
-            data["position"] = (con.execute("SELECT COALESCE(MAX(position),0)+1 FROM books").fetchone()[0])
+            data["position"] = (con.execute("SELECT COALESCE(MAX(position),0)+1 FROM books WHERE user_id=?", (uid(),)).fetchone()[0])
         new_id = _insert_book(con, data)
     return get_book(new_id)  # type: ignore[return-value]
 
@@ -188,30 +226,35 @@ def update_book(book_id: int, changes: dict) -> dict | None:
             row[k] = int(bool(row[k]))
     sets = ",".join(f"{k}=?" for k in row)
     with db() as con:
-        con.execute(f"UPDATE books SET {sets} WHERE id=?", (*row.values(), book_id))
+        con.execute(f"UPDATE books SET {sets} WHERE id=? AND user_id=?", (*row.values(), book_id, uid()))
     return get_book(book_id)
 
 
 def delete_book(book_id: int) -> bool:
     with db() as con:
-        return con.execute("DELETE FROM books WHERE id=?", (book_id,)).rowcount > 0
+        return con.execute("DELETE FROM books WHERE id=? AND user_id=?", (book_id, uid())).rowcount > 0
 
 
 def reorder(ids: list[int]) -> None:
     with db() as con:
         for pos, bid in enumerate(ids):
-            con.execute("UPDATE books SET position=? WHERE id=?", (pos, bid))
+            con.execute("UPDATE books SET position=? WHERE id=? AND user_id=?", (pos, bid, uid()))
 
 
-def stats() -> dict:
+def stats(user_id: int | None = None) -> dict:
+    u = user_id or uid()
     with db() as con:
         owned = con.execute("SELECT COUNT(*), COALESCE(SUM(hours_read),0), COALESCE(SUM(pages),0) "
-                            "FROM books WHERE status='owned'").fetchone()
-        authors = con.execute("SELECT COUNT(DISTINCT author) FROM books WHERE status='owned'").fetchone()[0]
-        reading = con.execute("SELECT COUNT(*) FROM books WHERE reading=1").fetchone()[0]
-        wish = con.execute("SELECT COUNT(*) FROM books WHERE status='wishlist'").fetchone()[0]
-        favs = con.execute("SELECT COUNT(*) FROM books WHERE favourite=1").fetchone()[0]
-    gaps = collection_gaps()
+                            "FROM books WHERE status='owned' AND user_id=?", (u,)).fetchone()
+        authors = con.execute("SELECT COUNT(DISTINCT author) FROM books WHERE status='owned' AND user_id=?", (u,)).fetchone()[0]
+        reading = con.execute("SELECT COUNT(*) FROM books WHERE reading=1 AND user_id=?", (u,)).fetchone()[0]
+        wish = con.execute("SELECT COUNT(*) FROM books WHERE status='wishlist' AND user_id=?", (u,)).fetchone()[0]
+        favs = con.execute("SELECT COUNT(*) FROM books WHERE favourite=1 AND user_id=?", (u,)).fetchone()[0]
+    token = current_user.set(u)
+    try:
+        gaps = collection_gaps()
+    finally:
+        current_user.reset(token)
     return {
         "books": owned[0], "hours_read": round(owned[1], 1), "pages": owned[2], "authors": authors,
         "reading_now": reading, "wishlist": wish, "favourites": favs,
@@ -335,7 +378,14 @@ def taste_profile(max_items: int = 12) -> str:
     favs = [f'{b["title"]} ({b["author"]})' for b in books if b.get("favourite")]
     reading = [b["title"] for b in books if b.get("reading")]
     bindings = Counter(b.get("binding") or "unknown" for b in books)
+    rt = ""
+    try:
+        import accounts  # local import: accounts imports library
+        rt = accounts.reader_type_line(uid())
+    except Exception:  # noqa: BLE001
+        rt = ""
     return (
+        (f"{rt}\n" if rt else "") +
         f"Owns {len(books)} books.\n"
         f"Top authors: {', '.join(a for a, _ in authors.most_common(max_items))}.\n"
         f"Top subjects: {', '.join(s for s, _ in subjects.most_common(max_items))}.\n"

@@ -2,7 +2,7 @@
 // Majid's palette: #081325 deep navy · #A9CDBE sage · #F2B53A marigold.
 // Cream is kept only for placards and labels, like museum cards under a lamp.
 
-export const APP_NAME = 'Working Title'; // placeholder — the only place the name lives in the app
+export const APP_NAME = 'The Book Butler';
 
 export const palette = {
   navy: '#081325',

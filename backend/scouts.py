@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 
 from pydantic import BaseModel, Field
@@ -27,6 +28,8 @@ from agents import PROMPTS, looks_like_injection
 from live import _coverage, _plausible, _tokens
 from llm import Meter, build_model
 
+_PRICE = re.compile(r"[$£€]\s?\d{1,4}(?:[.,]\d{2})?")
+
 BATCH = 2            # spines per scout (small = fast answers)
 MAX_SCOUTS = 12      # parallel agents per request
 CACHE_DAYS = 14
@@ -39,6 +42,8 @@ class ScoutItem(BaseModel):
     author: str = Field(default="", max_length=120)
     stars: int = Field(default=1, ge=1, le=5)
     reason: str = Field(default="", max_length=120)
+    collectible: bool = False
+    collectible_why: str = Field(default="", max_length=90)
 
 
 class ScoutReport(BaseModel):
@@ -59,7 +64,7 @@ def _scout() -> Agent:
 
 
 def _key(text: str) -> str:
-    return "scout|" + " ".join(sorted(set(_tokens(text))))[:200]
+    return f"scout|u{library.uid()}|" + " ".join(sorted(set(_tokens(text))))[:200]   # stars are per reader
 
 
 async def _run_scout(batch: list[dict], profile: str, meter: Meter, n: int) -> list[dict]:
@@ -76,7 +81,8 @@ async def _run_scout(batch: list[dict], profile: str, meter: Meter, n: int) -> l
         ok = it.is_book and it.title and not looks_like_injection(it.reason) \
             and _coverage(it.title, it.author, set(_tokens(raw)), library.norm(raw)) >= 0.6
         out.append({"id": it.id, "is_book": bool(ok), "title": it.title if ok else "", "author": it.author if ok else "",
-                    "stars": it.stars if ok else 0, "reason": it.reason if ok else ""})
+                    "stars": it.stars if ok else 0, "reason": it.reason if ok else "",
+                    "collectible": bool(ok and it.collectible), "collectible_why": it.collectible_why if ok and it.collectible else ""})
     return out
 
 
@@ -114,12 +120,19 @@ async def scout_spines(blocks: list[dict], client_tag: str = "") -> dict:
                 library._cache_put(_key(by_id[r["id"]]["text"]), {k: v for k, v in r.items() if k != "id"})
 
     owned = library.list_books("owned")
+    import accounts   # friends who own it ("Sam owns this — borrow it?")
     out = []
     for b in blocks:
         r = results.get(b["id"])
         if not r:
             continue
+        price = _PRICE.search(b.get("text", ""))
+        if price:
+            r = {**r, "price_seen": price.group(0).replace(" ", "")}   # a price sticker the camera read
         if r.get("is_book") and r.get("title"):
+            fr = accounts.friends_owning(r["title"], r.get("author"), library.uid())
+            if fr:
+                r = {**r, "friends_own": fr}
             hit, _ = library.match_owned(r["title"], r.get("author"), owned)
             if hit:
                 r = {**r, "owned_id": hit["id"]}

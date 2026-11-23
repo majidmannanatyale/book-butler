@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Caps, Display, ErrorNote, Italic, Ornament, Rule } from '@/components/ui';
@@ -15,6 +15,7 @@ const KIND_LABEL: Record<string, string> = {
 
 export default function Settings() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [url, setUrl] = useState('');
   const [health, setHealth] = useState<any>(null);
   const [usage, setUsage] = useState<any>(null);
@@ -56,6 +57,11 @@ export default function Settings() {
     <ScrollView style={{ backgroundColor: colors.paper }} contentContainerStyle={{ paddingTop: insets.top + 18, paddingHorizontal: 20, paddingBottom: 60 }}>
       <Caps>{APP_NAME}</Caps>
       <Display>Settings</Display>
+
+      <Section title="Your account">
+        <Italic style={{ fontSize: 15 }}>Your profile, reader type, friend code and friends' bookcases.</Italic>
+        <Button label="Open my account" onPress={() => router.push('/account')} style={{ marginTop: 10 }} />
+      </Section>
 
       <Section title="Library server">
         <Italic style={{ fontSize: 15 }}>Where the agents live. On a phone, use your computer’s address.</Italic>

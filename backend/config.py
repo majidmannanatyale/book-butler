@@ -18,8 +18,7 @@ for folder in (ROOT, ROOT.parent):
     if (folder / ".env").exists():
         load_dotenv(folder / ".env", override=False)
 
-# The one place the product name lives (still a placeholder).
-APP_NAME = os.getenv("APP_NAME", "Working Title")
+APP_NAME = os.getenv("APP_NAME", "The Book Butler")
 
 MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-6-luna")
 PORTKEY_BASE_URL = os.getenv("PORTKEY_BASE_URL", "https://api.portkey.ai/v1").rstrip("/")

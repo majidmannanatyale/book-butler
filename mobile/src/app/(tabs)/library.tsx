@@ -73,7 +73,9 @@ export default function Library() {
     <View style={{ paddingTop: insets.top + 18, paddingHorizontal: 20 }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         <View>
-          <Caps>{`${books.filter((b) => b.status === 'owned').length} volumes`}</Caps>
+          <Pressable onPress={() => { tap(); router.push('/account'); }} hitSlop={8}>
+            <Caps>{`${books.filter((b) => b.status === 'owned').length} volumes · friends →`}</Caps>
+          </Pressable>
           <Display>The Collection</Display>
         </View>
         <Pressable
