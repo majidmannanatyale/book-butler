@@ -7,7 +7,7 @@ export const unstable_settings = { anchor: 'index' };
 
 export default function TabLayout() {
   return (
-    <Tabs tabBar={(props) => <TabBar {...props} />} backBehavior="initialRoute" screenOptions={{ headerShown: false }}>
+    <Tabs tabBar={(props) => <TabBar {...props} />} backBehavior="initialRoute" screenOptions={{ headerShown: false, lazy: true, freezeOnBlur: true }}>
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
       <Tabs.Screen name="library" options={{ title: 'Library' }} />
       <Tabs.Screen name="finder" options={{ title: 'Finder' }} />

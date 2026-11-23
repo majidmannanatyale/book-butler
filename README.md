@@ -1,4 +1,4 @@
-# Working Title — a night gallery for your books
+# The Book Butler — a night gallery for your books
 
 *(The name is a placeholder.)* This is a mobile app for book lovers and collectors. Its centrepiece is the **Book Finder**. Walk into a bookshop, press record, and sweep your phone slowly along the shelves. As the app finds books, it lists them:
 

@@ -21,7 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import BookCover from '@/components/BookCover';
 import { IconBack, IconHeart } from '@/components/Icons';
 import { Button, Caps, ErrorNote, Italic, Ornament, Rule, tap } from '@/components/ui';
-import { api, Book, getBase } from '@/api';
+import { api, Book, bookCache, getBase } from '@/api';
 import Book3D from '@/components/Book3D';
 import SampleCard from '@/components/SampleCard';
 import { colors, fonts } from '@/theme';
@@ -48,7 +48,8 @@ export default function Showcase() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [book, setBook] = useState<Book | null>(null);
+  const [book, setBook] = useState<Book | null>(() => bookCache.get(Number(id)) ?? null);
+  const [settled, setSettled] = useState(false);
   const [edit, setEdit] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
@@ -62,7 +63,9 @@ export default function Showcase() {
       .book(Number(id))
       .then(setBook)
       .catch((e) => setError(e.message));
+    const h = setTimeout(() => setSettled(true), 380); // after the slide-in
     sway.value = withRepeat(withTiming(1, { duration: 4200, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => clearTimeout(h);
   }, [id]);
 
   const front = useAnimatedStyle(() => ({
@@ -166,11 +169,17 @@ export default function Showcase() {
         </Pressable>
         {!!error && <ErrorNote dark message={error} />}
         {book && (
-          <Animated.View entering={FadeIn.duration(700)}>
+          <Animated.View entering={FadeIn.duration(250)}>
             {/* the hang: one small piece on a large dark wall, with a museum label beside it */}
             <View style={{ height: wallH, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10 }}>
               <View style={{ width: '58%' }}>
-                {base ? <Book3D book={book} base={base} height={Math.min(300, wallH * 0.62)} /> : null}
+                {base && settled ? (
+                  <Book3D book={book} base={base} height={Math.min(300, wallH * 0.62)} />
+                ) : (
+                  <View style={{ height: Math.min(300, wallH * 0.62), alignItems: 'center', justifyContent: 'center' }}>
+                    <BookCover title={book.title} author={book.author} uri={book.cover_url} width={Math.min(300, wallH * 0.62) / 1.5} />
+                  </View>
+                )}
               </View>
               <Animated.View entering={FadeIn.delay(600).duration(900)} style={s.label}>
                 <Text style={s.labelArtist}>{(book.author || 'Unknown').toUpperCase()}</Text>
@@ -186,7 +195,9 @@ export default function Showcase() {
               </Animated.View>
             </View>
             <Italic color={colors.wallMuted} style={{ textAlign: 'center', fontSize: 12, opacity: 0.6, marginTop: -16 }}>
-              {(book.faces || []).length ? 'drag the book to turn it · wearing your own photos' : 'drag the book to turn it all the way around'}
+              {['front', 'back', 'spine'].every((f) => (book.faces || []).includes(f))
+                ? 'drag the book to turn it all the way around'
+                : 'photograph its front, back and spine (Add → Camera) to turn it in 3D'}
             </Italic>
             <View style={{ alignItems: 'center', marginTop: 18 }}>
               <Caps color={colors.wallMuted} style={{ fontSize: 8.5, opacity: 0.5 }}>scroll for details</Caps>

@@ -9,10 +9,11 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 import { IconClose } from '@/components/Icons';
 import MicButton, { micAvailable } from '@/components/MicButton';
 import { Caps, Chip, Italic, Rule, tap } from '@/components/ui';
-import { api, money } from '@/api';
+import BookCover from '@/components/BookCover';
+import { api, LibBook, money } from '@/api';
 import { colors, fonts } from '@/theme';
 
-type Msg = { role: 'reader' | 'librarian'; text: string; meta?: string };
+type Msg = { role: 'reader' | 'librarian'; text: string; meta?: string; books?: LibBook[] };
 
 const STARTERS = [
   'Which series am I closest to finishing?',
@@ -41,7 +42,7 @@ export default function Librarian() {
     try {
       const r = await api.librarian(question, history);
       const tools = r.tools.length ? `consulted ${Array.from(new Set(r.tools)).join(', ')}` : 'from memory';
-      setMsgs((m) => [...m, { role: 'librarian', text: r.answer.replace(/\*\*?([^*]+)\*\*?/g, '$1'), meta: `${tools} · ${money(r.usage.cost_usd)}` }]);
+      setMsgs((m) => [...m, { role: 'librarian', text: r.answer.replace(/\*\*?([^*]+)\*\*?/g, '$1'), meta: `${tools} · ${money(r.usage.cost_usd)}`, books: r.books }]);
     } catch (e: any) {
       setMsgs((m) => [...m, { role: 'librarian', text: e.message, meta: 'error' }]);
     }
@@ -54,9 +55,11 @@ export default function Librarian() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={[s.head, { paddingTop: insets.top + 10 }]}>
-        <View>
+        <View style={{ flex: 1, paddingRight: 12 }}>
           <Caps>At the desk</Caps>
-          <Text style={{ fontFamily: fonts.script, fontSize: 34, color: colors.ink, lineHeight: 44 }}>The Librarian</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={s.title}>
+            The Librarian{' '}
+          </Text>
         </View>
         <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Close">
           <IconClose color={colors.ink} />
@@ -77,6 +80,27 @@ export default function Librarian() {
         {msgs.map((m, i) => (
           <Animated.View key={i} entering={FadeInUp.duration(400)} style={m.role === 'reader' ? s.reader : s.librarian}>
             <Text style={m.role === 'reader' ? s.readerText : s.librarianText}>{m.text}</Text>
+            {!!m.books?.length && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingTop: 12 }}>
+                {m.books.map((b) => (
+                  <Pressable
+                    key={b.title}
+                    style={{ width: 64 }}
+                    accessibilityLabel={`Open ${b.title}`}
+                    onPress={() => {
+                      tap();
+                      if (b.id) router.push(`/book/${b.id}`);
+                      else router.push({ pathname: '/pick', params: { title: b.title, author: b.author, stars: '4', reason: b.why || 'Suggested by the Librarian' } });
+                    }}
+                  >
+                    <BookCover title={b.title} author={b.author} uri={b.cover_url} width={64} />
+                    <Caps numberOfLines={1} style={{ fontSize: 7.5, marginTop: 4, color: b.status === 'owned' ? colors.owned : colors.gold }}>
+                      {b.status === 'owned' ? 'on your shelf' : b.status === 'wishlist' ? 'wishlist' : 'find it →'}
+                    </Caps>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
             {!!m.meta && <Caps style={{ fontSize: 8.5, marginTop: 6 }}>{m.meta}</Caps>}
           </Animated.View>
         ))}
@@ -104,6 +128,8 @@ export default function Librarian() {
 }
 
 const s = StyleSheet.create({
+  // script capitals overhang their box; the trailing space + padding stop Android clipping/wrapping
+  title: { fontFamily: fonts.script, fontSize: 34, color: colors.ink, lineHeight: 48, paddingRight: 6 },
   head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingBottom: 8 },
   reader: { alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: colors.ink, padding: 12 },
   readerText: { fontFamily: fonts.body, color: colors.paper, fontSize: 16, lineHeight: 22 },

@@ -2,7 +2,8 @@
 // Faces use the reader's own photos when they took them (front / back / spine),
 // otherwise the Open Library cover and the server-drawn gold-foil spine.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder, View } from 'react-native';
+import { PanResponder, StyleSheet, View } from 'react-native';
+import BookCover from '@/components/BookCover';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -39,7 +40,7 @@ function useTex(url?: string | null) {
 
 type Spin = { y: number; x: number; vy: number; dragging: boolean };
 
-function Model({ book, base, spin }: { book: Book; base: string; spin: React.MutableRefObject<Spin> }) {
+function Model({ book, base, spin, spinnable }: { book: Book; base: string; spin: React.MutableRefObject<Spin>; spinnable: boolean }) {
   const g = useRef<THREE.Group>(null);
   const faces = book.faces || [];
   const v = String(faces.length);
@@ -69,8 +70,16 @@ function Model({ book, base, spin }: { book: Book; base: string; spin: React.Mut
     set(1, spine);
   }, [front, back, spine, mats, cloth]);
 
-  useFrame((_, dt) => {
+  useFrame((state, dt) => {
     const s = spin.current;
+    if (!spinnable) {
+      // only the front was photographed (or none): stand still, cover forward, breathing gently
+      if (g.current) {
+        g.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.6) * 0.18;
+        g.current.rotation.x = 0.04;
+      }
+      return;
+    }
     if (!s.dragging) {
       s.y += s.vy * dt;
       s.vy *= Math.pow(0.12, dt); // inertia that settles
@@ -93,8 +102,12 @@ function Model({ book, base, spin }: { book: Book; base: string; spin: React.Mut
 }
 
 export default function Book3D({ book, base, height = 330 }: { book: Book; base: string; height?: number }) {
+  // Spin all the way round only when we truly have every side (the reader's own photos).
+  const faces = book.faces || [];
+  const spinnable = ['front', 'back', 'spine'].every((f) => faces.includes(f));
+  const [ready, setReady] = useState(false);
   // start three-quarter on, so cover and spine both show
-  const spin = useRef<Spin>({ y: -Math.PI / 2 + 0.5, x: 0.08, vy: 0, dragging: false });
+  const spin = useRef<Spin>({ y: spinnable ? -Math.PI / 2 + 0.5 : 0, x: 0.08, vy: 0, dragging: false });
   const last = useRef({ dx: 0, t: 0 });
   const pan = useMemo(
     () =>
@@ -125,13 +138,23 @@ export default function Book3D({ book, base, height = 330 }: { book: Book; base:
     [],
   );
   return (
-    <View style={{ height }} {...pan.panHandlers}>
-      <Canvas camera={{ fov: 35, position: [0, 0.2, 6.2] }} style={{ flex: 1, backgroundColor: 'transparent' }}>
+    <View style={{ height }} {...(spinnable ? pan.panHandlers : {})}>
+      {!ready && (
+        // instant 2D cover while the 3D scene spins up
+        <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+          <BookCover title={book.title} author={book.author} uri={book.cover_url} width={height * 0.42} />
+        </View>
+      )}
+      <Canvas
+        camera={{ fov: 35, position: [0, 0.2, 6.2] }}
+        style={{ flex: 1, backgroundColor: 'transparent' }}
+        onCreated={() => setTimeout(() => setReady(true), 250)}
+      >
         <ambientLight intensity={0.65} color="#A9CDBE" />
         <directionalLight position={[2, 3, 5]} intensity={1.3} color="#FFE6B0" />
         <directionalLight position={[-3, 1, -4]} intensity={0.5} color="#9FC3F0" />
         <pointLight position={[0, 3, 2]} intensity={5} distance={8} color="#F2B53A" />
-        <Model book={book} base={base} spin={spin} />
+        <Model book={book} base={base} spin={spin} spinnable={spinnable} />
       </Canvas>
     </View>
   );

@@ -108,6 +108,28 @@ def quote(exclude: int | None = None):
     return {"index": idx, **QUOTES[idx]}
 
 
+class QuoteSaveIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    author: str = Field(default="", max_length=120)
+    to: str = Field(pattern="^(wishlist|tbr)$")
+
+
+@app.post("/api/quote/save")
+def save_quote_book(body: QuoteSaveIn):
+    """From a quote on Home: put its book on the wishlist or the TBR pile."""
+    owned = library.list_books(None)
+    hit = next((b for b in owned if library.similarity(body.title, body.author, b["title"], b["author"]) >= library.OWNED_THRESHOLD), None)
+    if hit:
+        if body.to == "tbr":
+            return {"book": library.update_book(hit["id"], {"tbr": True}), "already": hit["status"]}
+        return {"book": hit, "already": hit["status"]}
+    meta = (library.ol_search(title=body.title, author=body.author.replace("attributed to ", ""), limit=1) or [{}])[0]
+    b = library.add_book({"title": body.title, "author": body.author.replace("attributed to ", ""), "status": "wishlist",
+                          "tbr": body.to == "tbr", "cover_url": meta.get("cover_url"), "year": meta.get("year"),
+                          "subjects": meta.get("subjects", []), "pages": meta.get("pages")})
+    return {"book": b, "already": None}
+
+
 @app.get("/api/stats")
 def stats():
     return library.stats()
@@ -132,6 +154,7 @@ class BookIn(BaseModel):
     status: str = "owned"
     favourite: bool = False
     reading: bool = False
+    tbr: bool = False
     progress: float = 0
     hours_read: float = 0
     notes: str | None = None
@@ -153,6 +176,7 @@ class BookPatch(BaseModel):
     status: str | None = None
     favourite: bool | None = None
     reading: bool | None = None
+    tbr: bool | None = None
     progress: float | None = None
     hours_read: float | None = None
     notes: str | None = None
@@ -616,9 +640,41 @@ async def librarian_chat(request: Request, body: ChatIn):
     if agents.looks_like_injection(body.question):
         audit.append({"kind": "suspicious_chat", "question": body.question[:200]})
     try:
-        return await agents.ask_librarian(body.question, body.history)
+        r = await agents.ask_librarian(body.question, body.history)
     except Exception as exc:  # noqa: BLE001
         raise _friendly(exc)
+    return {**r, "books": _books_mentioned(r.get("answer", ""))}
+
+
+def _books_mentioned(answer: str, limit: int = 6) -> list[dict]:
+    """Plain code, $0: which of the reader's books / collection gaps the answer names,
+    in the order they appear, so the app can show them as tappable covers."""
+    import re as _re
+    text = answer.lower()
+    found: list[tuple[int, dict]] = []
+    seen: set[str] = set()
+
+    def hit(title: str) -> int:
+        main = title.split(":")[0].strip().lower()
+        if len(main) < 4:
+            return -1
+        m = _re.search(r"(?<![a-z])" + _re.escape(main) + r"(?![a-z])", text)
+        return m.start() if m else -1
+
+    for b in library.list_books(None):
+        pos = hit(b["title"])
+        if pos >= 0 and b["title"].lower() not in seen:
+            seen.add(b["title"].lower())
+            found.append((pos, {"id": b["id"], "title": b["title"], "author": b["author"],
+                                "cover_url": b.get("cover_url"), "status": b["status"]}))
+    for g in library.collection_gaps():
+        for m in g["missing"]:
+            pos = hit(m["title"])
+            if pos >= 0 and m["title"].lower() not in seen:
+                seen.add(m["title"].lower())
+                found.append((pos, {"id": None, "title": m["title"], "author": g["author"], "cover_url": None,
+                                    "status": "to_find", "why": f"Vol. {m['index']} of {g['collection']}, a series you collect"}))
+    return [b for _, b in sorted(found, key=lambda x: x[0])][:limit]
 
 
 # ------------------------------------------------------------- tokenomics

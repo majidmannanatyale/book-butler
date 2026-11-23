@@ -96,6 +96,7 @@ export type Book = {
   status: 'owned' | 'wishlist';
   favourite: boolean;
   reading: boolean;
+  tbr?: boolean;
   progress: number;
   hours_read: number;
   notes?: string | null;
@@ -208,7 +209,16 @@ export type Sample = {
   free?: boolean;
 };
 
+export type LibBook = { id: number | null; title: string; author: string; cover_url?: string | null; status: string; why?: string };
+
 // ---------- calls
+// books we've already fetched, so opening one paints instantly (then refreshes)
+export const bookCache = new Map<number, Book>();
+const remember = <T extends Book | Book[]>(x: T): T => {
+  (Array.isArray(x) ? x : [x]).forEach((b) => bookCache.set(b.id, b));
+  return x;
+};
+
 export const api = {
   base: getBase,
   health: () => req<any>('/api/health', undefined, 8000),
@@ -217,14 +227,16 @@ export const api = {
     req<{ index: number; text: string; author: string; work: string }>(
       `/api/quote${exclude != null ? `?exclude=${exclude}` : ''}`,
     ),
-  books: (status: 'owned' | 'wishlist' | 'all' = 'owned') => req<Book[]>(`/api/books?status=${status}`),
-  book: (id: number) => req<Book>(`/api/books/${id}`),
+  books: (status: 'owned' | 'wishlist' | 'all' = 'owned') => req<Book[]>(`/api/books?status=${status}`).then(remember),
+  book: (id: number) => req<Book>(`/api/books/${id}`).then(remember),
   addBook: (b: Partial<Book>) =>
     req<Book & { possible_duplicate_of?: number | null }>('/api/books', { method: 'POST', body: JSON.stringify(b) }),
   patchBook: (id: number, b: Partial<Book>) =>
     req<Book>(`/api/books/${id}`, { method: 'PATCH', body: JSON.stringify(b) }),
   deleteBook: (id: number) => req<{ ok: boolean }>(`/api/books/${id}`, { method: 'DELETE' }),
   reorder: (ids: number[]) => req('/api/books/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
+  saveQuote: (title: string, author: string, to: 'wishlist' | 'tbr') =>
+    req<{ book: Book; already: string | null }>('/api/quote/save', { method: 'POST', body: JSON.stringify({ title, author, to }) }, 30000),
   collections: () => req<{ collections: any[]; gaps: any[] }>('/api/collections'),
   search: (q: string) => req<{ results: SearchHit[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   isbn: (isbn: string) => req<SearchHit>(`/api/isbn/${encodeURIComponent(isbn)}`),
@@ -240,7 +252,7 @@ export const api = {
       90000,
     ),
   librarian: (question: string, history: { role: string; text: string }[]) =>
-    req<{ answer: string; tools: string[]; usage: Usage }>('/api/librarian', {
+    req<{ answer: string; tools: string[]; usage: Usage; books?: LibBook[] }>('/api/librarian', {
       method: 'POST',
       body: JSON.stringify({ question, history }),
     }),

@@ -103,7 +103,7 @@ def uid() -> int:
 
 BOOK_FIELDS = ("title", "author", "year", "publisher", "binding", "edition", "height_cm", "pages",
                "isbn", "cover_url", "subjects", "collection", "series_index", "status", "favourite",
-               "reading", "progress", "hours_read", "notes", "position", "faces")
+               "reading", "progress", "hours_read", "notes", "position", "faces", "tbr")
 
 
 # ----------------------------------------------------------------- database
@@ -133,6 +133,8 @@ def init_db(reset: bool = False) -> None:
         cols = {r[1] for r in con.execute("PRAGMA table_info(books)")}
         if "faces" not in cols:   # added later: which sides of the book the user photographed
             con.execute("ALTER TABLE books ADD COLUMN faces TEXT")
+        if "tbr" not in cols:      # added later: on the to-be-read pile
+            con.execute("ALTER TABLE books ADD COLUMN tbr INTEGER NOT NULL DEFAULT 0")
         if "user_id" not in cols:  # added later: whose book this is (1 = the demo reader)
             con.execute("ALTER TABLE books ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1")
         scols = {r[1] for r in con.execute("PRAGMA table_info(scan_cache)")}
@@ -175,6 +177,7 @@ def book_to_dict(r: sqlite3.Row) -> dict:
         d["subjects"] = []
     d["favourite"] = bool(d.get("favourite"))
     d["reading"] = bool(d.get("reading"))
+    d["tbr"] = bool(d.get("tbr"))
     try:
         d["faces"] = json.loads(d.get("faces") or "[]")
     except json.JSONDecodeError:
@@ -221,7 +224,7 @@ def update_book(book_id: int, changes: dict) -> dict | None:
         row["subjects"] = json.dumps(row["subjects"][:8])
     if isinstance(row.get("faces"), list):
         row["faces"] = json.dumps(row["faces"])
-    for k in ("favourite", "reading"):
+    for k in ("favourite", "reading", "tbr"):
         if k in row:
             row[k] = int(bool(row[k]))
     sets = ",".join(f"{k}=?" for k in row)

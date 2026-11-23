@@ -50,11 +50,33 @@ export default function Home() {
     }, [load]),
   );
 
+  const [menu, setMenu] = useState(false);
+  const [saved, setSaved] = useState('');
   const nextQuote = async () => {
     tap();
+    setMenu(false);
+    setSaved('');
     try {
       setQuote(await api.quote(quote?.index));
     } catch {}
+  };
+  const saveQuote = async (to: 'wishlist' | 'tbr') => {
+    if (!quote?.work) return;
+    tap();
+    setSaved('…');
+    try {
+      const r = await api.saveQuote(quote.work, quote.author, to);
+      setSaved(
+        r.already === 'owned' && to === 'wishlist'
+          ? 'Already on your shelves.'
+          : to === 'tbr'
+            ? `${r.book.title} is on your to-be-read pile.`
+            : `${r.book.title} is on your wishlist.`,
+      );
+    } catch (e: any) {
+      setSaved(e.message);
+    }
+    setMenu(false);
   };
 
   const first = quote?.text?.[0] ?? '';
@@ -71,7 +93,7 @@ export default function Home() {
         <Rule style={{ width: 28, alignSelf: 'center', marginTop: 10, backgroundColor: colors.sepia }} />
 
         {/* The quote: italic serif with a script initial, like an illuminated page */}
-        <Pressable onPress={nextQuote} accessibilityHint="Shows another quote" style={{ minHeight: 280, justifyContent: 'center' }}>
+        <Pressable onPress={() => { tap(); setMenu((m) => !m); setSaved(''); }} accessibilityHint="Options for this quote" style={{ minHeight: 280, justifyContent: 'center' }}>
           {quote ? (
             <Animated.View key={quote.index} entering={FadeIn.duration(900)} exiting={FadeOut.duration(300)}>
               <QuoteText first={first} rest={rest} />
@@ -85,6 +107,28 @@ export default function Home() {
             </Italic>
           ) : null}
         </Pressable>
+        {menu && quote && (
+          <Animated.View entering={FadeInDown.duration(300)} exiting={FadeOut.duration(200)} style={s.quoteMenu}>
+            {!!quote.work && (
+              <>
+                <Pressable onPress={() => saveQuote('wishlist')} style={s.quoteBtn} accessibilityRole="button">
+                  <Caps style={{ color: colors.gold }}>Add to wishlist</Caps>
+                </Pressable>
+                <Pressable onPress={() => saveQuote('tbr')} style={s.quoteBtn} accessibilityRole="button">
+                  <Caps style={{ color: colors.gold }}>Add to TBR</Caps>
+                </Pressable>
+              </>
+            )}
+            <Pressable onPress={nextQuote} style={s.quoteBtn} accessibilityRole="button">
+              <Caps style={{ color: colors.ink }}>Another quote</Caps>
+            </Pressable>
+          </Animated.View>
+        )}
+        {!!saved && (
+          <Animated.View entering={FadeIn}>
+            <Italic style={{ textAlign: 'center', fontSize: 14, color: colors.owned }}>{saved}</Italic>
+          </Animated.View>
+        )}
 
         {/* Stats, set like an invitation: 31 | VOLUMES */}
         {stats && (
@@ -178,6 +222,8 @@ function greeting() {
 }
 
 const s = StyleSheet.create({
+  quoteMenu: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  quoteBtn: { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(242,181,58,0.55)', paddingVertical: 9, paddingHorizontal: 12, backgroundColor: 'rgba(8,19,37,0.7)' },
   quote: {
     fontFamily: fonts.displayItalic,
     fontSize: 29,
