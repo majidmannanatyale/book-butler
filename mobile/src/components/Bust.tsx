@@ -5,10 +5,13 @@
 // words chosen by the Sculptor agent. Repeated details are GPU-instanced.
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { Canvas as _r3f } from '@react-three/fiber';
+void _r3f; // importing it installs the phone's image loader (used for the marble texture)
 
 import { getBase } from '@/api';
 
 export type Look = {
+  figure?: 'feminine' | 'masculine';
   hair?: 'curls' | 'waves' | 'long' | 'cropped' | 'bald' | 'bun' | 'veil';
   beard?: 'none' | 'short' | 'full';
   headwear?: 'none' | 'laurel' | 'diadem' | 'helmet' | 'hood' | 'crown';
@@ -25,11 +28,10 @@ function rand(seed: number) {
   return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
 }
 
-let _marble: THREE.Texture | null = null;
-/** Carrara marble: warm white with fine grey veining (generated once, 512², fbm). */
-export function marbleTexture() {
-  if (_marble) return _marble;
-  const N = 512;
+/** Carrara marble: warm white with fine grey veining (fbm). Only a fallback now: the library
+ *  server renders the same recipe at 512² (/api/tex/marble.jpg), because doing it here took
+ *  seconds of the phone's JS thread and held up the whole bookcase. */
+function proceduralMarble(N = 128) {
   const r = rand(11);
   const G = 16;
   const lat = Array.from({ length: (G + 1) * (G + 1) }, () => r());
@@ -61,21 +63,55 @@ export function marbleTexture() {
       data[i + 2] = Math.round(236 - dark * 108);
       data[i + 3] = 255;
     }
-  _marble = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
-  _marble.wrapS = _marble.wrapT = THREE.RepeatWrapping;
-  _marble.colorSpace = THREE.SRGBColorSpace;
-  _marble.generateMipmaps = true;
-  _marble.minFilter = THREE.LinearMipmapLinearFilter;
-  _marble.needsUpdate = true;
-  return _marble;
+  const t = new THREE.DataTexture(data, N, N, THREE.RGBAFormat);
+  t.generateMipmaps = true;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.needsUpdate = true;
+  return t;
+}
+
+let _marble: THREE.Texture | null = null;
+let _marbleLoading = false;
+const _waiting = new Set<THREE.MeshStandardMaterial>();
+
+function marbleIn(t: THREE.Texture) {
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  _marble = t;
+  _waiting.forEach((m) => {
+    m.map = t;
+    m.needsUpdate = true;
+  });
+  _waiting.clear();
+}
+
+/** Start fetching the marble (~30 KB, cached by the server). Safe to call many times. */
+export function preloadMarble() {
+  if (_marble || _marbleLoading) return;
+  _marbleLoading = true;
+  getBase()
+    .then((base) => new THREE.TextureLoader().loadAsync(`${base}/api/tex/marble.jpg`))
+    .then(marbleIn)
+    .catch(() => marbleIn(proceduralMarble(128)));
+}
+
+/** A material carved in marble: plain warm white until the texture arrives, then veined. */
+function marbled(m: THREE.MeshStandardMaterial) {
+  if (_marble) m.map = _marble;
+  else {
+    _waiting.add(m);
+    preloadMarble();
+  }
+  return m;
 }
 
 let _mats: { marble: THREE.MeshStandardMaterial; plinth: THREE.MeshStandardMaterial } | null = null;
 export function marbleMats() {
   if (_mats) return _mats;
   _mats = {
-    marble: new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.32, metalness: 0, side: THREE.DoubleSide }),
-    plinth: new THREE.MeshStandardMaterial({ map: marbleTexture(), roughness: 0.6, color: '#A8A196' }),
+    marble: marbled(new THREE.MeshStandardMaterial({ roughness: 0.32, metalness: 0, side: THREE.DoubleSide })),
+    plinth: marbled(new THREE.MeshStandardMaterial({ roughness: 0.6, color: '#A8A196' })),
   };
   return _mats;
 }
@@ -144,23 +180,92 @@ function useScan() {
 }
 
 // ---------------------------------------------------------------- surface fitting
-let _probe: THREE.Mesh | null = null;
-const _ray = new THREE.Raycaster();
+// Every ray here starts at one point inside the head, so triangles are sorted once into
+// direction bins (azimuth × elevation as seen from that point). A ray then tests only the
+// few dozen triangles in its bin instead of all ~17,700 — testing them all took seconds on
+// the phone's JS engine and held up the whole bookcase.
+const NU = 64, NV = 32;
+const _bins = new Map<string, number[][]>();
+
+function binOf(dx: number, dy: number, dz: number): [number, number] {
+  const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+  const u = ((Math.atan2(dx, dz) + Math.PI) / (2 * Math.PI)) * NU;
+  const v = ((Math.asin(Math.max(-1, Math.min(1, dy / len))) + Math.PI / 2) / Math.PI) * NV;
+  return [u, v];
+}
+
+function binsFor(scan: Scan, o: [number, number, number]): number[][] {
+  const key = `${o[0].toFixed(4)},${o[1].toFixed(4)},${o[2].toFixed(4)}`;
+  const hit = _bins.get(key);
+  if (hit && (hit as any).geom === scan.geom) return hit;
+  const P = scan.geom.attributes.position.array as Float32Array;
+  const I = scan.geom.index!.array as Uint16Array;
+  const cells: number[][] = Array.from({ length: NU * NV }, () => []);
+  const us = [0, 0, 0], vs = [0, 0, 0];
+  for (let t = 0; t < I.length; t += 3) {
+    for (let k = 0; k < 3; k++) {
+      const a = I[t + k] * 3;
+      const [u, v] = binOf(P[a] - o[0], P[a + 1] - o[1], P[a + 2] - o[2]);
+      us[k] = u;
+      vs[k] = v;
+    }
+    let u0 = Math.floor(Math.min(us[0], us[1], us[2])) - 1, u1 = Math.floor(Math.max(us[0], us[1], us[2])) + 1;
+    const v0 = Math.max(0, Math.floor(Math.min(vs[0], vs[1], vs[2])) - 1), v1 = Math.min(NV - 1, Math.floor(Math.max(vs[0], vs[1], vs[2])) + 1);
+    if (u1 - u0 > NU / 2 || v0 === 0 || v1 === NV - 1) {
+      u0 = 0; // straddles the seam behind the head or sits at a pole: put it in every column
+      u1 = NU - 1;
+    }
+    for (let v = v0; v <= v1; v++) for (let u = u0; u <= u1; u++) cells[v * NU + ((u + NU) % NU)].push(t);
+  }
+  (cells as any).geom = scan.geom;
+  _bins.set(key, cells);
+  return cells;
+}
+
+/** Distance along the ray (o + s·d) to the triangle, either side (Möller–Trumbore); -1 if it misses. */
+function hitTri(P: Float32Array, I: Uint16Array, t: number, o: [number, number, number], d: [number, number, number]) {
+  const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+  const e1x = P[b] - P[a], e1y = P[b + 1] - P[a + 1], e1z = P[b + 2] - P[a + 2];
+  const e2x = P[c] - P[a], e2y = P[c + 1] - P[a + 1], e2z = P[c + 2] - P[a + 2];
+  const px = d[1] * e2z - d[2] * e2y, py = d[2] * e2x - d[0] * e2z, pz = d[0] * e2y - d[1] * e2x;
+  const det = e1x * px + e1y * py + e1z * pz;
+  if (Math.abs(det) < 1e-12) return -1;
+  const inv = 1 / det;
+  const tx = o[0] - P[a], ty = o[1] - P[a + 1], tz = o[2] - P[a + 2];
+  const u = (tx * px + ty * py + tz * pz) * inv;
+  if (u < 0 || u > 1) return -1;
+  const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
+  const v = (d[0] * qx + d[1] * qy + d[2] * qz) * inv;
+  if (v < 0 || u + v > 1) return -1;
+  const s = (e2x * qx + e2y * qy + e2z * qz) * inv;
+  return s > 0 ? s : -1;
+}
+
 /** Move approximate points onto the scan's real surface (ray from `origin` through each point),
  *  lifted off the skin by `lift`. Points whose ray misses are dropped. */
 function onSurface(scan: Scan, pts: [number, number, number][], origin: [number, number, number], lift: number) {
-  if (!_probe || _probe.geometry !== scan.geom) _probe = new THREE.Mesh(scan.geom, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
-  const o = new THREE.Vector3(...origin);
+  const cells = binsFor(scan, origin);
+  const P = scan.geom.attributes.position.array as Float32Array;
+  const I = scan.geom.index!.array as Uint16Array;
   const out: [number, number, number][] = [];
-  const d = new THREE.Vector3();
+  const d: [number, number, number] = [0, 0, 0];
+  const maxR = Math.max(scan.head.rx, scan.head.ry, scan.head.rz) * 1.45; // further = not the head
   for (const p of pts) {
-    d.set(p[0], p[1], p[2]).sub(o).normalize();
-    _ray.set(o, d);
-    const hit = _ray.intersectObject(_probe, false);
-    const far = hit.length ? hit[hit.length - 1] : null; // outermost surface along the ray
-    if (!far) continue;
-    const q = far.point.clone().addScaledVector(d, lift);
-    out.push([q.x, q.y, q.z]);
+    const dx = p[0] - origin[0], dy = p[1] - origin[1], dz = p[2] - origin[2];
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    d[0] = dx / len;
+    d[1] = dy / len;
+    d[2] = dz / len;
+    const [u, v] = binOf(d[0], d[1], d[2]);
+    const cell = cells[Math.min(NV - 1, Math.floor(v)) * NU + (Math.floor(u) % NU)];
+    let far = -1; // outermost surface along the ray
+    for (const t of cell) {
+      const s = hitTri(P, I, t, origin, d);
+      if (s > far) far = s;
+    }
+    if (far < 0 || far > maxR) continue;
+    const k = far + lift;
+    out.push([origin[0] + d[0] * k, origin[1] + d[1] * k, origin[2] + d[2] * k]);
   }
   return out;
 }
@@ -214,6 +319,144 @@ function skullPoints(h: Head, n: number, seed: number, grow = 1.0): [number, num
     if (z > 0.3 && y < 0.55) continue; // the forehead and face stay bare
     const j = 1 + (rnd() - 0.5) * 0.06;
     pts.push([h.cx + x * sx * j, h.cy + y * sy * j + 0.02, h.cz - 0.03 + z * sz * j]);
+  }
+  return pts;
+}
+
+// ---------------------------------------------------------------- one scan, many sitters
+// Every bust starts from the same head scan, so each character gets its own proportions
+// (head width, face length, depth) from their seed, and a feminine figure gets a narrower
+// jaw, slimmer neck and narrower shoulders. Done once per character on ~9k vertices.
+const _morphs = new Map<string, Scan>();
+function sitter(scan: Scan, seed: number, figure: string): Scan {
+  const key = `${seed}|${figure}`;
+  const hit = _morphs.get(key);
+  if (hit && (hit as any).base === scan.geom) return hit;
+  const h = scan.head;
+  const r = rand(seed * 7 + 3);
+  const fem = figure === 'feminine';
+  const W = 0.95 + r() * 0.09; // head width
+  const L = 0.96 + r() * 0.08; // face length
+  const D = 0.96 + r() * 0.07; // head depth
+  const P = new Float32Array(scan.geom.attributes.position.array as Float32Array);
+  const span = Math.max(0.05, h.cy - h.chin);
+  carveFace(P, h, scan.faceZ, rand(seed * 13 + 5), fem);
+  for (let i = 0; i < P.length; i += 3) {
+    const x = P[i], y = P[i + 1], z = P[i + 2];
+    let nx = x, ny = y, nz = z;
+    if (y > h.neck) {
+      // the head: proportions around its centre, blended in over the neck
+      const k = Math.min(1, (y - h.neck) / 0.08);
+      nx = h.cx + (x - h.cx) * (1 + (W - 1) * k);
+      nz = h.cz + (z - h.cz) * (1 + (D - 1) * k);
+      ny = h.cy + (y - h.cy) * (1 + (L - 1) * k);
+      if (fem && y < h.cy) {
+        // a finer jaw and chin: narrow the lower face, most at the chin
+        const t = Math.min(1, Math.max(0, (h.cy - y) / span));
+        nx = h.cx + (nx - h.cx) * (1 - 0.13 * t * t);
+        nz = h.cz + (nz - h.cz) * (1 - 0.04 * t);
+      }
+    } else if (fem) {
+      // slimmer neck, narrower shoulders
+      const t = Math.min(1, (h.neck - y) / 0.12);
+      const sx = 1 - 0.12 * (1 - t) - 0.1 * t;
+      nx = h.cx + (x - h.cx) * sx;
+      nz = h.cz + (z - h.cz) * (1 - 0.08 * (1 - t) - 0.04 * t);
+    }
+    P[i] = nx;
+    P[i + 1] = ny;
+    P[i + 2] = nz;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(P, 3));
+  g.setAttribute('uv', scan.geom.attributes.uv);
+  g.setIndex(scan.geom.index);
+  g.computeVertexNormals();
+  g.computeBoundingSphere();
+  const head: Head = {
+    ...h,
+    rx: h.rx * W,
+    rz: h.rz * D,
+    ry: h.ry * L,
+    top: h.cy + (h.top - h.cy) * L,
+    chin: h.cy + (h.chin - h.cy) * L,
+  };
+  const out: Scan = { geom: g, head, faceZ: scan.faceZ };
+  (out as any).base = scan.geom;
+  _morphs.set(key, out);
+  return out;
+}
+
+/** Each sitter's own features. Soft bumps around landmarks measured on the scan's profile
+ *  (chin, lips, nose, eyes, brow, cheekbones, all as heights above the chin): the nose longer
+ *  or shorter, wider or finer; the brow heavier or smoother; cheekbones higher; lips fuller;
+ *  the chin stronger or softer. A feminine figure leans finer: smaller nose, smooth brow,
+ *  fuller lips, softer chin. */
+function carveFace(P: Float32Array, h: Head, faceZ: number, r: () => number, fem: boolean) {
+  const s = () => r() * 2 - 1; // -1..1
+  const c = h.chin;
+  const z0 = faceZ - 0.11; // roughly the plane of the cheeks
+  const nose = { y: c + 0.3, len: s() * 0.5 - (fem ? 0.28 : 0), wid: s() * 0.32 - (fem ? 0.18 : 0), droop: s() * 0.02 };
+  const brow = fem ? -0.016 + s() * 0.005 : s() * 0.02 + 0.008;
+  const cheek = Math.max(0, s() * 0.02 + 0.012 + (fem ? 0.008 : 0));
+  const lips = s() * 0.006 + (fem ? 0.012 : 0.002);
+  const chin = { fwd: s() * 0.035 - (fem ? 0.014 : 0), down: s() * 0.028 - (fem ? 0.008 : 0), wid: s() * 0.22 - (fem ? 0.12 : 0) };
+  const jaw = fem ? 0 : s() * 0.09; // broader or narrower jaw (a feminine jaw is already narrowed later)
+  const g = (dx: number, dy: number, dz: number, sx: number, sy: number, sz: number) =>
+    Math.exp(-((dx / sx) ** 2 + (dy / sy) ** 2 + (dz / sz) ** 2));
+  for (let i = 0; i < P.length; i += 3) {
+    let x = P[i], y = P[i + 1], z = P[i + 2];
+    if (z < h.cz || y < c - 0.1 || y > c + 0.7) continue; // only the face
+    const dx = x - h.cx;
+    // nose: longer/shorter (forward), wider/finer, tip up or down
+    const wn = g(dx, y - nose.y, z - faceZ, 0.06, 0.09, 0.1);
+    if (wn > 0.01) {
+      z += Math.max(0, z - z0) * nose.len * wn;
+      x += dx * nose.wid * wn;
+      y -= nose.droop * wn * Math.max(0, (z - z0) / 0.11);
+    }
+    // brow ridge across both eyes
+    const wb = g(Math.max(0, Math.abs(dx) - 0.1), y - (c + 0.53), z - (faceZ - 0.09), 0.05, 0.03, 0.06);
+    z += brow * wb;
+    // cheekbones, high on each side
+    const wc = g(Math.abs(dx) - 0.16, y - (c + 0.37), z - (faceZ - 0.19), 0.05, 0.045, 0.07);
+    x += Math.sign(dx) * cheek * wc;
+    z += cheek * 0.6 * wc;
+    // lips
+    const wl = g(dx, y - (c + 0.195), z - (faceZ - 0.06), 0.06, 0.03, 0.05);
+    z += lips * wl;
+    // chin: forward/back, longer/shorter, broader/narrower
+    const wch = g(dx, y - (c + 0.07), z - (faceZ - 0.08), 0.07, 0.06, 0.08);
+    z += chin.fwd * wch;
+    y -= chin.down * wch;
+    x += dx * chin.wid * wch;
+    // jaw width, strongest at the jaw angle below the ears
+    const wj = g(0, y - (c + 0.12), 0, 1, 0.11, 1) * Math.min(1, Math.abs(dx) / 0.12);
+    x += dx * jaw * wj;
+    P[i] = x;
+    P[i + 1] = y;
+    P[i + 2] = z;
+  }
+}
+
+/** Long hair that falls past the ears to the shoulders: vertical carved locks around the
+ *  sides and back of the head, leaving the face clear. Curly hair falls as curls. */
+function hairFall(h: Head, seed: number, curly: boolean): [number, number, number][] {
+  const r = rand(seed + 9);
+  const pts: [number, number, number][] = [];
+  const cols = curly ? 30 : 40;
+  const yTop = h.cy + h.ry * 0.25, yBot = h.neck - (curly ? 0.16 : 0.22);
+  const rowsN = curly ? 10 : 7;
+  for (let c = 0; c < cols; c++) {
+    // from just behind one cheek, round the back, to the other (front ±70° stays clear)
+    const a = Math.PI * 0.39 + (c / (cols - 1)) * Math.PI * 1.22;
+    for (let k = 0; k < rowsN; k++) {
+      const f = k / (rowsN - 1);
+      const y = yTop + (yBot - yTop) * f + (r() - 0.5) * (curly ? 0.05 : 0.02); // curls tumble, not stack
+      // hugs the skull at the top, then hangs a little wider as it reaches the shoulders
+      const spread = 1.0 + f * 0.1 + (r() - 0.5) * 0.035 + (c % 2) * 0.025; // two staggered layers
+      pts.push([h.cx + Math.sin(a) * h.rx * spread, y, h.cz - 0.03 + Math.cos(a) * h.rz * spread * 0.95]);
+    }
   }
   return pts;
 }
@@ -284,6 +527,12 @@ function Accessories({ scan, h, L, seed }: { scan: Scan; h: Head; L: Required<Lo
         : [],
     [L.headwear, h],
   );
+  // long hair falls to the shoulders; a woman's curls or waves fall too
+  const fem = L.figure === 'feminine';
+  const fall = useMemo(
+    () => (L.hair === 'long' || (fem && (L.hair === 'curls' || L.hair === 'waves')) ? hairFall(h, seed, L.hair === 'curls') : []),
+    [L.hair, fem, seed, h],
+  );
   const capY = h.cy + 0.02;
   return (
     <group>
@@ -303,10 +552,14 @@ function Accessories({ scan, h, L, seed }: { scan: Scan; h: Head; L: Required<Lo
           normalFrom={[h.cx, h.cy + 0.02, h.cz - 0.03, sx, sy, sz]}
         />
       )}
-      {L.hair === 'long' && (
-        <mesh material={m} position={[h.cx, h.cy - 0.32, h.cz - 0.12]} scale={[sx * 1.1, 1, sz * 0.9]}>
-          <cylinderGeometry args={[0.9, 1.05, 0.62, 28, 1, true, Math.PI * 0.55, Math.PI * 0.9]} />
-        </mesh>
+      {fall.length > 0 && (
+        <>
+          {/* the carved mass of the hair behind the locks, so no light shows through */}
+          <mesh material={m} position={[h.cx, (h.cy + h.ry * 0.2 + h.neck - 0.2) / 2, h.cz - 0.03]} scale={[h.rx * 0.98, 1, h.rz * 0.93]}>
+            <cylinderGeometry args={[1, 1.08, h.cy + h.ry * 0.2 - (h.neck - 0.2), 40, 1, true, Math.PI * 0.42, Math.PI * 1.16]} />
+          </mesh>
+          <Instanced positions={fall} scale={L.hair === 'curls' ? 0.064 : [0.06, 0.17, 0.056]} geom={SPHERE} material={m} />
+        </>
       )}
       {L.hair === 'bun' && (
         <mesh material={m} position={[h.cx, h.cy + 0.06, h.cz - sz * 1.05]} scale={0.13}>
@@ -354,23 +607,12 @@ function Accessories({ scan, h, L, seed }: { scan: Scan; h: Head; L: Required<Lo
       )}
 
       {/* drapery: details on top of the garment layer (see Garment) */}
-      {L.drape === 'toga' &&
-        [0, 1, 2].map((k) => (
-          <mesh key={k} material={m} position={[0.1 - k * 0.05, 0.42 - k * 0.1, 0.12]} rotation={[0.25, 0.1, -0.7]} scale={[1, 1, 0.48]}>
-            <torusGeometry args={[0.55 + k * 0.06, 0.035, 10, 36, Math.PI * 0.62]} />
-          </mesh>
-        ))}
       {L.drape === 'chiton' &&
         [-1, 1].map((s) => (
           <mesh key={s} material={m} position={[s * 0.42, h.neck - 0.08, 0.1]} scale={0.05}>
             <sphereGeometry args={[1, 14, 10]} />
           </mesh>
         ))}
-      {L.drape === 'cloak' && (
-        <mesh material={m} position={[0.36, h.neck - 0.12, 0.18]} scale={0.065}>
-          <sphereGeometry args={[1, 14, 10]} />
-        </mesh>
-      )}
     </group>
   );
 }
@@ -382,13 +624,12 @@ function Garment({ scan, drape }: { scan: Scan; drape: string }) {
   const neckline = scan.head.neck - (drape === 'armor' ? 0.02 : drape === 'chiton' ? 0.1 : 0.04);
   const key = `${drape}|${neckline.toFixed(3)}`;
   if (!_garmentMats[key]) {
-    _garmentMats[key] = new THREE.MeshStandardMaterial({
-      map: marbleTexture(),
+    _garmentMats[key] = marbled(new THREE.MeshStandardMaterial({
       roughness: drape === 'armor' ? 0.22 : 0.42,
       color: drape === 'armor' ? '#E4DED4' : '#F4F0E8',
       side: THREE.DoubleSide,
       clippingPlanes: [new THREE.Plane(new THREE.Vector3(0, -1, 0), neckline)],
-    });
+    }));
   }
   const grow = drape === 'cloak' ? 1.06 : drape === 'armor' ? 1.03 : 1.04;
   return (
@@ -417,8 +658,14 @@ function StandIn() {
 }
 
 export default function Bust({ look = {}, seed = 1 }: { look?: Look; seed?: number }) {
-  const scan = useScan();
-  const L = { hair: 'waves', beard: 'none', headwear: 'none', drape: 'toga', age: 'middle', build: 'average', ...look } as Required<Look>;
+  const base = useScan();
+  const L = { figure: 'masculine', hair: 'waves', beard: 'none', headwear: 'none', drape: 'toga', age: 'middle', build: 'average', ...look } as Required<Look>;
+  if (L.figure === 'feminine') {
+    L.beard = 'none';
+    if (L.hair === 'cropped' || L.hair === 'bald') L.hair = 'long';
+  }
+  // each character is carved from the scan with their own proportions
+  const scan = useMemo(() => (base ? sitter(base, seed, L.figure) : null), [base, seed, L.figure]);
   const W = L.build === 'broad' ? 1.06 : L.build === 'slight' ? 0.94 : 1;
   return (
     <group>

@@ -126,6 +126,48 @@ def page_edges() -> bytes:
     return _jpeg(img, 80)
 
 
+@lru_cache(maxsize=1)
+def marble() -> bytes:
+    """Carrara marble for the busts (512², fbm veining). Same recipe the phone used to run itself;
+    rendering it here with numpy takes ~50 ms once instead of seconds on the phone's JS thread."""
+    import numpy as np
+
+    N, G = 512, 16
+    s = 11
+
+    def rnd():
+        nonlocal s
+        s = (s * 1664525 + 1013904223) & 0xFFFFFFFF
+        return s / 4294967296
+
+    lat = np.array([rnd() for _ in range((G + 1) * (G + 1))])
+
+    def vn(x, y):
+        x, y = np.mod(x, 1.0), np.mod(y, 1.0)
+        gx, gy = x * G, y * G
+        x0, y0 = np.floor(gx).astype(int), np.floor(gy).astype(int)
+        fx, fy = gx - x0, gy - y0
+        at = lambda i, j: lat[(j % G) * (G + 1) + (i % G)]  # noqa: E731
+        sx, sy = fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy)
+        a = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * sx
+        b = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * sx
+        return a + (b - a) * sy
+
+    def fbm(x, y):
+        return vn(x, y) * 0.5 + vn(x * 2, y * 2) * 0.25 + vn(x * 4, y * 4) * 0.125 + vn(x * 8, y * 8) * 0.0625
+
+    v, u = np.mgrid[0:N, 0:N] / N
+    t = fbm(u, v)
+    vein = np.abs(np.sin((u * 2 + v + t * 3.2) * np.pi * 2))
+    thin = (1 - vein) ** 60 * 0.42 + (1 - vein) ** 9 * 0.06
+    cloud = (fbm(u * 2 + 0.3, v * 2) - 0.47) * 0.09
+    dark = np.maximum(0, thin + cloud)
+    rgb = np.stack([246 - dark * 120, 243 - dark * 118, 236 - dark * 108], -1)
+    # flipY: the phone's DataTexture put row 0 at the bottom; an image puts it at the top
+    img = Image.fromarray(np.clip(np.round(rgb), 0, 255).astype("uint8")[::-1], "RGB")
+    return _jpeg(img, 88)
+
+
 # ------------------------------------------------------------ fetched covers
 
 def _cache_path(url: str):

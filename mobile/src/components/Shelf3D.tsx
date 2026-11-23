@@ -316,6 +316,8 @@ function Rig({ rows, selected, extraTop = 0 }: { rows: number; selected: boolean
 export default function Shelf3D({ books, base, onOpen, readOnly = false, decor = [], onDecorChange }: { books: Book[]; base: string; onOpen: (id: number) => void; readOnly?: boolean; decor?: Decor[]; onDecorChange?: () => void }) {
   const [sel, setSel] = useState<number | null>(null);
   const [bust, setBust] = useState<Decor | null>(null);
+  // the busts are decoration: let the books land first, then set them on top of the case
+  const [decorOn, setDecorOn] = useState(false);
   const { placed, rows } = useMemo(() => layout(books), [books]);
   const chosen = books.find((b) => b.id === sel);
   return (
@@ -328,6 +330,7 @@ export default function Shelf3D({ books, base, onOpen, readOnly = false, decor =
         }}
         onCreated={({ gl }) => {
           gl.localClippingEnabled = true;
+          setTimeout(() => setDecorOn(true), 450);
         }}
         style={{ flex: 1, backgroundColor: colors.paper }}
       >
@@ -354,7 +357,7 @@ export default function Shelf3D({ books, base, onOpen, readOnly = false, decor =
             />
           ))}
         </Suspense>
-        {decor.length > 0 && (
+        {decorOn && decor.length > 0 && (
           <Suspense fallback={null}>
             <DecorRow
               decor={decor}

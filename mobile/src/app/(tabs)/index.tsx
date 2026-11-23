@@ -9,9 +9,11 @@ import Logo from '@/components/Logo';
 import { refreshWidget } from '@/widget/refresh';
 import BookCover from '@/components/BookCover';
 import { Caps, Italic, Ornament, Rule, tap } from '@/components/ui';
-import { api, Book, Stats, coverFor } from '@/api';
+import { api, Book, Stats, coverFor, getBase } from '@/api';
 import { APP_NAME, colors, fonts } from '@/theme';
 import Tip, { tourDone } from '@/components/Tip';
+import { preloadBust, preloadMarble } from '@/components/Bust';
+import { preload } from '@/components/tex';
 
 type Quote = { index: number; text: string; author: string; work: string };
 
@@ -46,6 +48,19 @@ export default function Home() {
   }, []);
 
   // first launch: the welcome tour
+  useEffect(() => {
+    // While you read the quote, fetch what the Library's bookcase needs (spines, the bust
+    // model and its marble), so opening the Library doesn't wait on the network.
+    const t = setTimeout(() => {
+      preloadBust();
+      preloadMarble();
+      Promise.all([getBase(), api.books('all')])
+        .then(([base, books]) => preload(base, books, 'spine'))
+        .catch(() => {});
+    }, 1200);
+    return () => clearTimeout(t);
+  }, []);
+
   useEffect(() => {
     tourDone().then((d) => !d && setTimeout(() => router.push('/tour'), 600));
   }, []);

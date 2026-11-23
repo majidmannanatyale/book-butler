@@ -286,6 +286,11 @@ def page_texture():
     return Response(content=textures.page_edges(), media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/api/tex/marble.jpg")
+def marble_texture():
+    return Response(content=textures.marble(), media_type="image/jpeg", headers={"Cache-Control": "public, max-age=604800"})
+
+
 @app.on_event("startup")
 def _prewarm_textures():
     """Fetch every cover in the background so the first showcase is already fast."""
@@ -293,6 +298,7 @@ def _prewarm_textures():
 
     def run():
         try:
+            textures.marble()  # the busts' marble, rendered once
             with library.db() as con:
                 rows = con.execute("SELECT cover_url FROM books WHERE cover_url IS NOT NULL").fetchall()
             textures.prewarm([{"cover_url": r[0]} for r in rows])

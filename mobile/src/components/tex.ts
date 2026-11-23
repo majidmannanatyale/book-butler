@@ -3,6 +3,11 @@
 // so a texture is ~20 KB and loads once; afterwards it is shared, never re-fetched.
 import { useEffect, useState } from 'react';
 import * as THREE from 'three';
+// On the phone, react-three-fiber installs the loaders three.js needs (images via expo-asset)
+// when it is first imported. Import it here so textures can be fetched before any 3D view
+// has mounted (e.g. preloading from Home), not only from inside a Canvas.
+import { Canvas as _r3f } from '@react-three/fiber';
+void _r3f; // keep the import (and its loader setup) even if unused names get shaken out
 
 import { Book } from '@/api';
 
@@ -30,20 +35,27 @@ function load(url: string): Promise<THREE.Texture | null> {
   let p = cache.get(url);
   if (!p) {
     p = new Promise((resolve) => {
+      const fail = () => {
+        setTimeout(() => cache.delete(url), 0); // let a later view retry (after cache.set below)
+        resolve(null);
+      };
+      const timer = setTimeout(fail, 20000); // a load that never answers must not block forever
+      try {
       new THREE.TextureLoader().load(
         url,
         (t) => {
           t.colorSpace = THREE.SRGBColorSpace;
           t.anisotropy = 4;
+          clearTimeout(timer);
           ready.set(url, t);
           resolve(t);
         },
         undefined,
-        () => {
-          cache.delete(url); // let a later view retry
-          resolve(null);
-        },
+        fail,
       );
+      } catch {
+        fail(); // a loader that throws must not leave a dead promise in the cache
+      }
     });
     cache.set(url, p);
   }
