@@ -6,3 +6,5 @@ python-dotenv
 httpx
 pillow
 python-multipart
+numpy
+opencv-python-headless   # crop.py: cut the book out of hand-held photos

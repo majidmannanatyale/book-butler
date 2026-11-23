@@ -1,6 +1,6 @@
 # The Book Butler — a night gallery for your books
 
-*(The name is a placeholder.)* This is a mobile app for book lovers and collectors. Its centrepiece is the **Book Finder**. Walk into a bookshop, press record, and sweep your phone slowly along the shelves. As the app finds books, it lists them:
+This is an Android-first mobile app for book lovers and collectors. Its centrepiece is the **Book Finder**. Walk into a bookshop, press record, and sweep your phone slowly along the shelves. As the app finds books, it lists them:
 
 - **★ Picks for you.** Each pick gets 1–5 stars for how well it suits *your* taste, plus a one-line reason.
 - **◆ Books that complete a collection you've started.** For example, *Harry Potter vol. 4 — 4/7 owned*.
@@ -8,11 +8,13 @@
 - **! Booby-trapped spines.** If printed text tries to give the AI instructions, the app flags it and ignores it.
 
 The rest of the app:
-- **Home:** a calm screen with lamplight drifting across a navy wall and dust motes in the beam. A new quote writes itself in on each visit, and your stats count up.
-- **Library:** a **3D bookcase**. Each book is a model sized from its height and page count, with gold-foil spine art. Tap a spine and the book slides off the shelf and turns to show its cover. A gallery grid and drag-to-arrange view are also available.
-- **Book showcase:** each book stands on a plinth under a spotlight. You can turn it over and edit any field.
-- **Add a book** four ways: search, ISBN, **photograph the copyright page**, or type it in by hand.
-- **Ask the Librarian:** a chat agent that answers questions about your collection.
+- **Home:** a calm screen with lamplight drifting across a navy wall. A quote writes itself in; tap it to put that book on your **wishlist** or **to-be-read** pile. A home-screen **widget** shows what you're reading.
+- **Library:** a **3D walnut bookcase** under a brass picture light. Each book is sized from its height and page count. Tap a spine to take it off the shelf. **Collections** shows series in reading order (with dashed slots for missing volumes) and every edition you own side by side; **Gallery** shows covers. The wishlist adds the books missing from your collections by itself, and **friends' ratings** appear under your wishlist and TBR.
+- **Book showcase:** a museum wall with a label. The book is a real 3D model (cover boards, page block, rounded spine for hardcovers). With your own photos of front, back and spine it turns all the way round. **Quarter-star ratings, a review, Finished / Did-not-finish**, what friends thought, and **Listen & read**: free LibriVox audiobooks and Open Library ebooks where they exist, then Spotify, Audible, Kindle, Google Play and Libby.
+- **Characters:** a book's characters as **antique marble busts in your room** (camera + gyro parallax). Keep one as decor on top of your bookcase.
+- **Add a book:** photograph front, back and spine (the AI finds the book and OpenCV cuts your hand and the background out of the model), search, ISBN, or **import Goodreads / Libib** (ratings, reviews and read dates come across). The app **warns before you add a book you already own**, and says whether it's the same edition.
+- **Ask the Librarian** by text or voice; books it mentions appear as covers you can open.
+- **Accounts & friends**, reader types, a welcome tour and one-time tooltips.
 
 ---
 
@@ -115,6 +117,8 @@ The **MCP server** (`mcp_server/server.py`, FastMCP) is the only way agents touc
 | v3, recording session | ML Kit on the phone + library match | $0 | ~0.2 s to match |
 |  | + Scout team, 12 unknown spines, 6 agents in parallel | **$0.0007** | **2.7 s** |
 |  | + Scout team, 4 unknown spines, 2 agents in parallel | $0.0002 | 2.5 s |
+| v4, real Pixel shelf, 17 books, ONE frame (`backend/finder_eval.py`) | before: 6 right, 1 wrong → after: **11 right, 0 wrong** | $0.0008 | ~4 s |
+|  | same shelf swept again | **$0.00** | 0.7 s |
 | Any version, a spine seen before | from cache | **$0.00** | < 0.1 s |
 | Librarian chat question | 1–3 MCP tool calls | $0.0002–0.0004 | ~3 s |
 
@@ -124,6 +128,8 @@ What made it cheaper and faster:
 - reasoning effort `none` for scouts and vision
 - per-spine and per-shelf caches
 - the Curator only runs when there is something to rank
+- scouts return every book in a camera text (one block often spans 2–4 spines), and an OCR-tolerant guard keeps only titles the spine supports
+- covers and 3D textures are fetched once, sized for the GPU and served from the library server
 - Open Library responses are cached, and its huge ISBN field is skipped
 - a daily budget cap (default $0.50), enforced on the server and shown in Settings
 
@@ -139,7 +145,9 @@ What made it cheaper and faster:
 ## Project layout
 
 ```
-backend/      FastAPI app, agents (agents.py, live.py, scouts.py), prompts, data layer, spine art
+backend/      FastAPI app, agents (agents.py, live.py, scouts.py, characters.py), prompts, data layer,
+              crop.py (book cut-out), textures.py (covers), listen.py, bustmodel.py,
+              finder_eval.py (Book Finder accuracy on a real OCR dump), smoke_test.py
 mcp_server/   the library MCP server
 mobile/       Expo (React Native) app; src/components/SessionFinder.tsx is the recording session
 data/         seed library, quotes, fonts for spine art (runtime DB is git-ignored)
@@ -147,4 +155,14 @@ test_data/    synthetic shelves for repeatable tests + generator
 output/       audit trail
 ```
 
-Book data and covers come from [Open Library](https://openlibrary.org). Spine art uses Cormorant Garamond (SIL Open Font License).
+## Testing
+
+```powershell
+python backend/smoke_test.py          # every endpoint against a running backend
+python backend/finder_eval.py --fresh # Book Finder accuracy on a real shelf (precision first)
+cd mobile; npx tsc --noEmit; npx expo-doctor
+```
+
+## Credits
+
+Book data, covers and free ebooks come from [Open Library](https://openlibrary.org); free audiobooks from [LibriVox](https://librivox.org). Spine art uses Cormorant Garamond (SIL Open Font License). The marble busts are carved on **"Infinite, 3D Head Scan" by Lee Perry-Smith** (www.ir-ltd.net), based on a work at www.triplegangers.com, licensed **CC BY 3.0**.
