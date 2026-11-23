@@ -249,11 +249,11 @@ function Bookcase({ rows }: { rows: number }) {
         <boxGeometry args={[W + 0.1, 0.08, DEPTH + 0.14]} />
       </mesh>
       {/* brass picture light over the top shelf, casting warm light down the case */}
-      <mesh position={[0, topY - 0.09, DEPTH / 2 + 0.12]} rotation={[0, 0, Math.PI / 2]}>
+      <mesh position={[0, topY + 0.07, DEPTH / 2 + 0.06]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.035, 0.035, W * 0.62, 20]} />
         <meshStandardMaterial color="#B8893A" metalness={0.9} roughness={0.3} emissive="#5A3A0A" emissiveIntensity={0.4} />
       </mesh>
-      <mesh position={[0, topY - 0.1, DEPTH / 2 + 0.1]} rotation={[0, 0, Math.PI / 2]}>
+      <mesh position={[0, topY + 0.045, DEPTH / 2 + 0.075]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.012, 0.012, W * 0.6, 8]} />
         <meshBasicMaterial color="#FFE2A8" />
       </mesh>
