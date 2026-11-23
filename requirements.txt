@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pydantic-ai-slim[openai]
+fastmcp
+python-dotenv
+httpx
+pillow
+python-multipart

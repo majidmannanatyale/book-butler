@@ -1,0 +1,20 @@
+# secrets
+.env
+.env.*
+!.env.example
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+# node / expo
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+# runtime data (seed DB is rebuilt from data/seed_library.json)
+data/library.db
+data/library.db-*
+output/scans/
+output/debug/
