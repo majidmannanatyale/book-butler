@@ -62,7 +62,8 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 26
+            "minSdkVersion": 26,
+            "usesCleartextTraffic": true
           }
         }
       ],
@@ -93,7 +94,7 @@
           "widgets": [
             {
               "name": "ReadingWidget",
-              "label": "The Book Butler \u2014 reading now",
+              "label": "The Book Butler — reading now",
               "description": "What you are reading, and your collection at a glance",
               "minWidth": "250dp",
               "minHeight": "110dp",

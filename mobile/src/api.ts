@@ -28,6 +28,13 @@ export async function getBase(): Promise<string> {
   return cached;
 }
 
+/** Fast cover for a book in YOUR library: the server's sized, cached copy (or the
+ *  reader's own photo, or a printed cover) instead of a slow Open Library fetch. */
+export function coverFor(b: { id?: number | null; cover_url?: string | null; faces?: string[] }) {
+  if (cached && b.id) return `${cached}/api/books/${b.id}/tex/front.jpg?v=${(b.faces || []).join('')}`;
+  return b.cover_url || null;
+}
+
 export async function setBase(url: string) {
   cached = url.trim().replace(/\/$/, '');
   await AsyncStorage.setItem(KEY, cached);

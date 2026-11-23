@@ -8,7 +8,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import BookCover from '@/components/BookCover';
 import { IconHeart } from '@/components/Icons';
 import { Button, Caps, Chip, Display, ErrorNote, Italic, Rule, tap } from '@/components/ui';
-import { api, Book, Decor, getBase, Verdict } from '@/api';
+import { api, Book, Decor, getBase, Verdict, coverFor } from '@/api';
 import Shelf3D from '@/components/Shelf3D';
 import CollectionsView from '@/components/CollectionsView';
 import { stars, VerdictBadge } from '@/components/FriendVerdicts';
@@ -197,7 +197,7 @@ export default function Library() {
           renderItem={({ item, drag, isActive }: RenderItemParams<Book>) => (
             <ScaleDecorator>
               <Pressable onLongPress={drag} delayLongPress={150} style={[s.row, isActive && { backgroundColor: colors.paperDeep }]}>
-                <BookCover title={item.title} author={item.author} uri={item.cover_url} width={34} />
+                <BookCover title={item.title} author={item.author} uri={coverFor(item)} width={34} />
                 <View style={{ flex: 1, marginLeft: 14 }}>
                   <Text style={s.rowTitle} numberOfLines={1}>
                     {item.title}
@@ -262,7 +262,7 @@ export default function Library() {
               }}
               accessibilityLabel={`${item.title} by ${item.author}`}
             >
-              <BookCover title={item.title} author={item.author} uri={item.cover_url} width={cw} />
+              <BookCover title={item.title} author={item.author} uri={coverFor(item)} width={cw} />
               {item.favourite && (
                 <View style={s.fav}>
                   <IconHeart color={colors.gold} size={14} filled />

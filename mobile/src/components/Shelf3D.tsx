@@ -5,7 +5,7 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
-import { pagesUrl, texUrl, useTexture } from '@/components/tex';
+import { pagesUrl, shadowTexture, texUrl, useTexture } from '@/components/tex';
 import * as THREE from 'three';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
@@ -18,7 +18,7 @@ const SHELF_W = 2.3; // inner width of one shelf (scene units ≈ 10 cm)
 const SHELF_GAP = 1.4; // vertical distance between shelves
 const DEPTH = 0.62;
 
-type Placed = { book: Book; x: number; y: number; w: number; h: number; lean: number; i: number };
+type Placed = { book: Book; x: number; y: number; z: number; w: number; h: number; lean: number; i: number };
 
 function layout(books: Book[]): { placed: Placed[]; rows: number } {
   const placed: Placed[] = [];
@@ -31,7 +31,9 @@ function layout(books: Book[]): { placed: Placed[]; rows: number } {
       row += 1;
       x = -SHELF_W / 2;
     }
-    placed.push({ book: b, x: x + w / 2, y: -row * SHELF_GAP + h / 2, w, h, lean: 0, i });
+    // books never line up perfectly: a few mm forward or back
+    const z = (((b.id * 2654435761) >>> 0) % 1000) / 1000 * 0.07 - 0.035;
+    placed.push({ book: b, x: x + w / 2, y: -row * SHELF_GAP + h / 2, z, w, h, lean: 0, i });
     x += w + 0.012;
   });
   // the last book on each row leans gently against its neighbour
@@ -111,7 +113,7 @@ function BookMesh({
     const k = 1 - Math.pow(0.001, dt); // smooth follow
     const tx = selected ? 0 : p.x;
     const ty = selected ? centerY : p.y + drop * drop * 1.2;
-    const tz = selected ? 1.6 : anySelected ? -0.05 : 0;
+    const tz = selected ? 1.6 : (anySelected ? -0.05 : 0) + p.z;
     const ry = selected ? -Math.PI / 2 + Math.sin(state.clock.elapsedTime * 0.8) * 0.18 : 0;
     const s = selected ? 1.15 : 1;
     g.position.x += (tx - g.position.x) * k;
@@ -169,8 +171,57 @@ function BookMesh({
   );
 }
 
+let _wood: THREE.Texture | null = null;
+/** Walnut: warm brown with long grain lines and a little figure (generated once). */
+function woodTexture() {
+  if (_wood) return _wood;
+  const W = 64, H = 512;
+  const data = new Uint8Array(W * H * 4);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const offs = Array.from({ length: 12 }, () => rnd());
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const u = x / W, v = y / H;
+      let g = 0;
+      for (let k = 0; k < 12; k++) g += Math.sin((u * (6 + k * 3) + Math.sin(v * 6 + offs[k] * 6) * 0.15 + offs[k]) * Math.PI * 2) / (k + 2);
+      const line = Math.pow(Math.abs(Math.sin((u * 22 + Math.sin(v * 9) * 0.35 + g * 0.08) * Math.PI)), 6);
+      const t = 0.5 + g * 0.18 - line * 0.22 + (rnd() - 0.5) * 0.05;
+      const i = (y * W + x) * 4;
+      data[i] = Math.max(0, Math.min(255, 70 + t * 52));
+      data[i + 1] = Math.max(0, Math.min(255, 42 + t * 30));
+      data[i + 2] = Math.max(0, Math.min(255, 24 + t * 16));
+      data[i + 3] = 255;
+    }
+  _wood = new THREE.DataTexture(data, W, H, THREE.RGBAFormat);
+  _wood.wrapS = _wood.wrapT = THREE.RepeatWrapping;
+  _wood.colorSpace = THREE.SRGBColorSpace;
+  _wood.needsUpdate = true;
+  return _wood;
+}
+
+let _panel: THREE.Texture | null = null;
+/** The back panel: deep navy, warmer and lighter near the lamp at the top. */
+function panelTexture() {
+  if (_panel) return _panel;
+  const H = 128;
+  const data = new Uint8Array(4 * H);
+  for (let y = 0; y < H; y++) {
+    const t = Math.pow(y / (H - 1), 1.6); // 0 bottom -> 1 top (texture v goes up)
+    const i = y * 4;
+    data[i] = Math.round(10 + t * 40);
+    data[i + 1] = Math.round(22 + t * 30);
+    data[i + 2] = Math.round(40 + t * 18);
+    data[i + 3] = 255;
+  }
+  _panel = new THREE.DataTexture(data, 1, H, THREE.RGBAFormat);
+  _panel.colorSpace = THREE.SRGBColorSpace;
+  _panel.needsUpdate = true;
+  return _panel;
+}
+
 function Bookcase({ rows }: { rows: number }) {
-  const wood = '#4A2F1B';
+  const wood = useMemo(() => new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: 0.55, metalness: 0.05 }), []);
   const W = SHELF_W + 0.16;
   const H = rows * SHELF_GAP + 0.2;
   const topY = SHELF_GAP - 0.05;
@@ -180,25 +231,37 @@ function Bookcase({ rows }: { rows: number }) {
       {/* back panel */}
       <mesh position={[0, midY, -DEPTH / 2 - 0.04]}>
         <boxGeometry args={[W, H, 0.04]} />
-        <meshStandardMaterial color="#0C1A2E" roughness={1} />
+        <meshStandardMaterial map={panelTexture()} roughness={1} />
       </mesh>
       {/* sides */}
       {[-1, 1].map((s) => (
-        <mesh key={s} position={[(s * W) / 2, midY, 0]}>
+        <mesh key={s} position={[(s * W) / 2, midY, 0]} material={wood}>
           <boxGeometry args={[0.08, H + 0.1, DEPTH + 0.1]} />
-          <meshStandardMaterial color={wood} roughness={0.7} />
         </mesh>
       ))}
       {/* shelves (one under each row, plus a top) */}
       {Array.from({ length: rows }, (_, r) => (
-        <mesh key={r} position={[0, -r * SHELF_GAP - 0.03, 0]}>
+        <mesh key={r} position={[0, -r * SHELF_GAP - 0.03, 0]} material={wood}>
           <boxGeometry args={[W, 0.06, DEPTH + 0.1]} />
-          <meshStandardMaterial color={wood} roughness={0.65} />
         </mesh>
       ))}
-      <mesh position={[0, topY, 0]}>
+      <mesh position={[0, topY, 0]} material={wood}>
         <boxGeometry args={[W + 0.1, 0.08, DEPTH + 0.14]} />
-        <meshStandardMaterial color={wood} roughness={0.65} />
+      </mesh>
+      {/* brass picture light over the top shelf, casting warm light down the case */}
+      <mesh position={[0, topY - 0.09, DEPTH / 2 + 0.12]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.035, 0.035, W * 0.62, 20]} />
+        <meshStandardMaterial color="#B8893A" metalness={0.9} roughness={0.3} emissive="#5A3A0A" emissiveIntensity={0.4} />
+      </mesh>
+      <mesh position={[0, topY - 0.1, DEPTH / 2 + 0.1]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.012, 0.012, W * 0.6, 8]} />
+        <meshBasicMaterial color="#FFE2A8" />
+      </mesh>
+      <spotLight position={[0, topY - 0.05, DEPTH / 2 + 0.9]} angle={0.75} penumbra={0.9} intensity={22} distance={H + 3} decay={1.6} color="#FFD9A0" />
+      {/* soft shadow where the case meets the floor */}
+      <mesh position={[0, topY - H - 0.02, 0.1]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[W * 1.8, DEPTH * 3]} />
+        <meshBasicMaterial map={shadowTexture()} transparent opacity={0.9} depthWrite={false} />
       </mesh>
     </group>
   );

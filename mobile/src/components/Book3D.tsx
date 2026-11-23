@@ -7,7 +7,7 @@ import BookCover from '@/components/BookCover';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-import { Book } from '@/api';
+import { Book, coverFor } from '@/api';
 import { pagesUrl, shadowTexture, texUrl, useTexture } from '@/components/tex';
 import { colors } from '@/theme';
 
@@ -53,34 +53,51 @@ function Model({ book, base, spin, spinnable }: { book: Book; base: string; spin
   // proportions from the real book: height (cm) and page count -> thickness
   const H = 2.2 * Math.min(1.25, Math.max(0.8, (book.height_cm || 20) / 20));
   const W = H * 0.66;
-  const T = 0.22 + Math.min(1000, book.pages || 320) / 1000 * 0.45;
+  const T = 0.18 + Math.min(1000, book.pages || 320) / 1000 * 0.42;
+  const hard = /hard|cloth|leather|board/i.test(book.binding || '') ;
 
-  // BoxGeometry faces: 0 +x page edges, 1 -x spine, 2 top, 3 bottom, 4 +z front cover, 5 -z back cover
+  // A real book, not a box: cover boards (+z front, -z back), a page block with
+  // paper edges, and the spine on the left (-x) — rounded for hardcovers.
+  const C = hard ? 0.04 : 0.014;      // board thickness
+  const O = hard ? 0.055 : 0.0;       // how far the boards overhang the pages
   const mats = useMemo(() => {
-    const m = (c: string, r = 0.8) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: 0.02 });
-    return [m('#EFE6D2', 0.95), m(cloth), m('#EFE6D2', 0.95), m('#EFE6D2', 0.95), m(cloth, 0.6), m(cloth, 0.7)];
+    const m = (c: string, r = 0.75) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: 0.02 });
+    const board = () => [m(cloth), m(cloth), m(cloth), m(cloth), m(cloth, 0.55), m(cloth, 0.6)];
+    return {
+      front: board(),
+      back: board(),
+      pages: [m('#EFE6D2', 0.95), m('#EFE6D2', 0.95), m('#EFE6D2', 0.95), m('#EFE6D2', 0.95), m('#EFE6D2', 0.95), m('#EFE6D2', 0.95)],
+      spine: m(cloth, 0.6),
+    };
   }, [cloth]);
   useEffect(() => {
-    const set = (i: number, t: THREE.Texture | null) => {
-      mats[i].map = t;
-      mats[i].color.set(t ? '#ffffff' : cloth);
-      mats[i].needsUpdate = true;
+    const put = (mm: THREE.MeshStandardMaterial, t: THREE.Texture | null) => {
+      mm.map = t;
+      mm.color.set(t ? '#ffffff' : cloth);
+      mm.needsUpdate = true;
     };
-    set(4, front);
-    set(5, back);
-    set(1, spine);
-    [0, 2, 3].forEach((i) => {
-      mats[i].map = pages;
-      mats[i].needsUpdate = true;
+    put(mats.front[4], front);         // outside of the front board faces +z
+    put(mats.back[5], back);           // outside of the back board faces -z
+    put(mats.spine, spine);
+    mats.pages.forEach((mm) => {
+      mm.map = pages;
+      mm.color.set('#ffffff');
+      mm.needsUpdate = true;
     });
   }, [front, back, spine, pages, mats, cloth]);
+  // the spine image reads top-to-bottom across the curved (or flat) spine
+  useEffect(() => {
+    if (!spine) return;
+    spine.wrapS = THREE.RepeatWrapping;
+    spine.needsUpdate = true;
+  }, [spine]);
 
   useFrame((state, dt) => {
     const s = spin.current;
     if (!spinnable) {
       // only the front was photographed (or none): stand still, cover forward, breathing gently
       if (g.current) {
-        g.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.6) * 0.18;
+        g.current.rotation.y = 0.32 + Math.sin(state.clock.elapsedTime * 0.6) * 0.16;
         g.current.rotation.x = 0.04;
       }
       return;
@@ -97,12 +114,31 @@ function Model({ book, base, spin, spinnable }: { book: Book; base: string; spin
     }
   });
 
+  const pageW = W - O - (hard ? 0.02 : 0);
   return (
     <>
       <group ref={g}>
-        <mesh material={mats}>
-          <boxGeometry args={[T, H, W]} />
+        {/* front and back boards */}
+        <mesh material={mats.front} position={[0, 0, T / 2 - C / 2]}>
+          <boxGeometry args={[W, H, C]} />
         </mesh>
+        <mesh material={mats.back} position={[0, 0, -T / 2 + C / 2]}>
+          <boxGeometry args={[W, H, C]} />
+        </mesh>
+        {/* the text block, set back from the edges of the boards */}
+        <mesh material={mats.pages} position={[-W / 2 + (hard ? 0.02 : 0) + pageW / 2, 0, 0]}>
+          <boxGeometry args={[pageW, H - 2 * O, T - 2 * C + 0.002]} />
+        </mesh>
+        {/* the spine: rounded and proud for a hardcover, flat for a paperback */}
+        {hard ? (
+          <mesh material={mats.spine} position={[-W / 2, 0, 0]} scale={[0.55, 1, 1]}>
+            <cylinderGeometry args={[T / 2, T / 2, H, 28, 1, true, Math.PI, Math.PI]} />
+          </mesh>
+        ) : (
+          <mesh material={mats.spine} position={[-W / 2 - 0.001, 0, 0]} rotation={[0, -Math.PI / 2, 0]}>
+            <planeGeometry args={[T, H]} />
+          </mesh>
+        )}
       </group>
       <mesh position={[0, -H / 2 - 0.25, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[W * 2.2, W * 1.1]} />
@@ -118,7 +154,7 @@ export default function Book3D({ book, base, height = 330 }: { book: Book; base:
   const spinnable = ['front', 'back', 'spine'].every((f) => faces.includes(f));
   const [ready, setReady] = useState(false);
   // start three-quarter on, so cover and spine both show
-  const spin = useRef<Spin>({ y: spinnable ? -Math.PI / 2 + 0.5 : 0, x: 0.08, vy: 0, dragging: false });
+  const spin = useRef<Spin>({ y: 0.45, x: 0.08, vy: 0, dragging: false });
   const last = useRef({ dx: 0, t: 0 });
   const pan = useMemo(
     () =>
@@ -153,7 +189,7 @@ export default function Book3D({ book, base, height = 330 }: { book: Book; base:
       {!ready && (
         // instant 2D cover while the 3D scene spins up
         <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-          <BookCover title={book.title} author={book.author} uri={book.cover_url} width={height * 0.42} />
+          <BookCover title={book.title} author={book.author} uri={coverFor(book)} width={height * 0.42} />
         </View>
       )}
       <Canvas

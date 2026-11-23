@@ -9,7 +9,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import BookCover from '@/components/BookCover';
 import { Caps, Italic, tap } from '@/components/ui';
-import { api, Book } from '@/api';
+import { api, Book, coverFor } from '@/api';
 import { colors, fonts } from '@/theme';
 
 type Def = { name: string; author: string; members: string[] };
@@ -106,7 +106,7 @@ export default function CollectionsView({ books }: { books: Book[] }) {
               sl.copies.length ? (
                 sl.copies.map((b, k) => (
                   <Pressable key={b.id} onPress={() => open(b)} style={{ width: W }}>
-                    <BookCover title={b.title} author={b.author} uri={b.cover_url} width={W} />
+                    <BookCover title={b.title} author={b.author} uri={coverFor(b)} width={W} />
                     <Caps style={s.vol}>{k ? `vol. ${sl.index} · ed. ${k + 1}` : `vol. ${sl.index}`}</Caps>
                   </Pressable>
                 ))
@@ -133,7 +133,7 @@ export default function CollectionsView({ books }: { books: Book[] }) {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 8 }}>
                 {eds.map((b) => (
                   <Pressable key={b.id} onPress={() => open(b)} style={{ width: W + 10 }}>
-                    <BookCover title={b.title} author={b.author} uri={b.cover_url} width={W} />
+                    <BookCover title={b.title} author={b.author} uri={coverFor(b)} width={W} />
                     <Caps style={s.vol} numberOfLines={2}>{[b.edition, b.binding, b.year].filter(Boolean).join(' · ') || 'edition'}</Caps>
                   </Pressable>
                 ))}
@@ -152,7 +152,7 @@ export default function CollectionsView({ books }: { books: Book[] }) {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 8 }}>
                 {bs.map((b) => (
                   <Pressable key={b.id} onPress={() => open(b)} style={{ width: W }}>
-                    <BookCover title={b.title} author={b.author} uri={b.cover_url} width={W} />
+                    <BookCover title={b.title} author={b.author} uri={coverFor(b)} width={W} />
                   </Pressable>
                 ))}
               </ScrollView>

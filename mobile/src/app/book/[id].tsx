@@ -21,7 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import BookCover from '@/components/BookCover';
 import { IconBack, IconHeart } from '@/components/Icons';
 import { Button, Caps, ErrorNote, Italic, Ornament, Rule, tap } from '@/components/ui';
-import { api, Book, bookCache, getBase } from '@/api';
+import { api, Book, bookCache, getBase, coverFor } from '@/api';
 import Book3D from '@/components/Book3D';
 import SampleCard from '@/components/SampleCard';
 import RatingReview from '@/components/RatingReview';
@@ -182,7 +182,7 @@ export default function Showcase() {
                   <Book3D book={book} base={base} height={bookH} />
                 ) : (
                   <View style={{ height: bookH, alignItems: 'center', justifyContent: 'center' }}>
-                    <BookCover title={book.title} author={book.author} uri={book.cover_url} width={bookH / 1.9} />
+                    <BookCover title={book.title} author={book.author} uri={coverFor(book)} width={bookH / 1.9} />
                   </View>
                 )}
               </View>

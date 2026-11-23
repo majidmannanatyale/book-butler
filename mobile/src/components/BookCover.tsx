@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { colors, fonts } from '@/theme';
 
@@ -41,6 +42,8 @@ export default function BookCover({
           accessibilityLabel={`Cover of ${title}`}
         />
         <View style={s.spineShade} />
+        <View style={s.hinge} />
+        <LinearGradient colors={['rgba(255,255,255,0.14)', 'rgba(255,255,255,0)', 'rgba(0,0,0,0.12)']} locations={[0, 0.45, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
       </View>
     );
   }
@@ -82,6 +85,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     padding: 6,
   },
+  hinge: { position: 'absolute', left: 6, top: 0, bottom: 0, width: 1, backgroundColor: 'rgba(255,255,255,0.12)' },
   spineShade: {
     position: 'absolute',
     left: 0,

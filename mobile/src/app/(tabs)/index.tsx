@@ -9,7 +9,7 @@ import Logo from '@/components/Logo';
 import { refreshWidget } from '@/widget/refresh';
 import BookCover from '@/components/BookCover';
 import { Caps, Italic, Ornament, Rule, tap } from '@/components/ui';
-import { api, Book, Stats } from '@/api';
+import { api, Book, Stats, coverFor } from '@/api';
 import { APP_NAME, colors, fonts } from '@/theme';
 import Tip, { tourDone } from '@/components/Tip';
 
@@ -171,7 +171,7 @@ export default function Home() {
                 }}
                 style={s.readingCard}
               >
-                <BookCover title={b.title} author={b.author} uri={b.cover_url} width={44} />
+                <BookCover title={b.title} author={b.author} uri={coverFor(b)} width={44} />
                 <View style={{ flex: 1, marginLeft: 14 }}>
                   <Text style={s.readingTitle} numberOfLines={1}>
                     {b.title}
