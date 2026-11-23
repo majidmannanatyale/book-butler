@@ -12,6 +12,7 @@ import { Caps, Chip, Italic, Rule, tap } from '@/components/ui';
 import BookCover from '@/components/BookCover';
 import { api, LibBook, money } from '@/api';
 import { colors, fonts } from '@/theme';
+import Tip from '@/components/Tip';
 
 type Msg = { role: 'reader' | 'librarian'; text: string; meta?: string; books?: LibBook[] };
 
@@ -106,6 +107,9 @@ export default function Librarian() {
         ))}
         {busy && <Italic style={{ fontSize: 15 }}>The librarian is checking the shelves…</Italic>}
       </ScrollView>
+      <View>
+        <Tip id="librarian-mic" text="Tap the mic and just ask — or type. Books it mentions appear as covers you can open." style={{ bottom: 6, left: 12 }} />
+      </View>
       <View style={[s.inputRow, { paddingBottom: Math.max(insets.bottom, 12) }]}>
         <MicButton onPartial={setText} onFinal={onVoiceFinal} />
         <TextInput

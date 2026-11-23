@@ -28,6 +28,7 @@ import RatingReview from '@/components/RatingReview';
 import FriendVerdicts from '@/components/FriendVerdicts';
 import ListenRead from '@/components/ListenRead';
 import { colors, fonts } from '@/theme';
+import Tip from '@/components/Tip';
 
 const MUSEUM_WALL = '#0B1110'; // the deep green-black of a gallery wall at night
 
@@ -197,6 +198,9 @@ export default function Showcase() {
                   {book.status === 'wishlist' ? 'Wanted · not yet acquired' : `In the collection${book.reading ? ' · now reading' : ''}`}
                 </Text>
               </Animated.View>
+            </View>
+            <View>
+              <Tip id="showcase-characters" text="Meet this book's characters as marble busts — in your room." style={{ bottom: 6, right: 16 }} />
             </View>
             <View style={s.under}>
               <Italic color={colors.wallMuted} style={{ fontSize: 12, opacity: 0.7, flex: 1 }}>

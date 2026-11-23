@@ -31,6 +31,7 @@ import { Button, Caps, Chip, ErrorNote, Italic, tap } from '@/components/ui';
 import { api, money } from '@/api';
 import { readShelf } from '@/ondevice';
 import { colors, fonts } from '@/theme';
+import Tip from '@/components/Tip';
 
 type Status = 'reading' | 'scouting' | 'owned' | 'missing' | 'pick' | 'book' | 'noise' | 'flagged';
 type Found = {
@@ -350,6 +351,9 @@ export default function SessionFinder({ onSnapshot }: { onSnapshot: () => void }
           ))}
         </View>
         {/* progress ring + record button */}
+        {!recording && !ended && (
+          <Tip id="finder-record" text="Press record and sweep slowly along the spines. Finds appear below, best first." style={{ bottom: 100, left: 40, right: 40 }} />
+        )}
         <View style={s.controls}>
           <Ring pct={pct} />
           <Pressable onPress={toggle} disabled={!ready} accessibilityRole="button" accessibilityLabel={recording ? 'Stop recording' : 'Start recording'} style={[s.rec, !ready && { opacity: 0.4 }]}>

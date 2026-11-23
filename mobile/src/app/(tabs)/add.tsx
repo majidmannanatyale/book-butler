@@ -13,6 +13,7 @@ import ImportPanel from '@/components/ImportPanel';
 import { Button, Caps, Chip, Display, ErrorNote, Italic, Rule, tap } from '@/components/ui';
 import { api, Draft, money, SearchHit } from '@/api';
 import { colors, fonts } from '@/theme';
+import Tip from '@/components/Tip';
 
 type Mode = 'camera' | 'search' | 'isbn' | 'import' | 'manual';
 
@@ -175,7 +176,13 @@ function IsbnMode() {
 
 function CameraMode() {
   const [result, setResult] = useState<null | { draft: Draft; verified: boolean; cost: number; shots: Record<string, { uri: string; b64: string }> }>(null);
-  if (!result) return <GuidedCamera onRead={(r) => setResult(r as any)} />;
+  if (!result)
+    return (
+      <View>
+        <GuidedCamera onRead={(r) => setResult(r as any)} />
+        <Tip id="add-camera" text="Front, back, spine. Hold it however you like — your hand is cut out of the 3D model." arrow="none" style={{ top: 8, left: 8, right: 8 }} />
+      </View>
+    );
   const upload = async (id: number) => {
     for (const side of ['front', 'back', 'spine'] as const) {
       const shot = result.shots[side];

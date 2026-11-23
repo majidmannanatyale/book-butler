@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Caps, Display, ErrorNote, Italic, Ornament, Rule } from '@/components/ui';
 import { api, getBase, money, setBase, tokens } from '@/api';
 import { APP_NAME, colors, fonts } from '@/theme';
+import { resetTips } from '@/components/Tip';
 
 const KIND_LABEL: Record<string, string> = {
   scan: 'Book Finder scans',
@@ -121,6 +122,10 @@ export default function Settings() {
               <Text style={s.ledgerVal}>{String(a.timestamp || '').slice(11, 16)}</Text>
             </View>
           ))}
+      </Section>
+
+      <Section title="Tour & tips">
+        <Button label="Replay the tour" kind="outline" onPress={async () => { await resetTips(); router.push('/tour'); }} style={{ marginTop: 6 }} />
       </Section>
 
       <Section title="Linked accounts">

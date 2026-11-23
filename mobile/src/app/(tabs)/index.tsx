@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import BookCover from '@/components/BookCover';
 import { Caps, Italic, Ornament, Rule, tap } from '@/components/ui';
 import { api, Book, Stats } from '@/api';
 import { APP_NAME, colors, fonts } from '@/theme';
+import Tip, { tourDone } from '@/components/Tip';
 
 type Quote = { index: number; text: string; author: string; work: string };
 
@@ -42,6 +43,11 @@ export default function Home() {
     } catch {
       setOffline(true);
     }
+  }, []);
+
+  // first launch: the welcome tour
+  useEffect(() => {
+    tourDone().then((d) => !d && setTimeout(() => router.push('/tour'), 600));
   }, []);
 
   useFocusEffect(
@@ -92,6 +98,9 @@ export default function Home() {
         <Caps style={{ textAlign: 'center' }}>{name ? `${greeting()}, ${name}` : APP_NAME}</Caps>
         <Rule style={{ width: 28, alignSelf: 'center', marginTop: 10, backgroundColor: colors.sepia }} />
 
+        <View>
+          <Tip id="home-quote" text="Tap a quote to add its book to your wishlist or to-be-read pile." arrow="down" style={{ top: 0, left: 0 }} delay={1600} />
+        </View>
         {/* The quote: italic serif with a script initial, like an illuminated page */}
         <Pressable onPress={() => { tap(); setMenu((m) => !m); setSaved(''); }} accessibilityHint="Options for this quote" style={{ minHeight: 280, justifyContent: 'center' }}>
           {quote ? (
