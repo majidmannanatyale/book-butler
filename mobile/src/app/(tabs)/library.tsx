@@ -8,9 +8,10 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import BookCover from '@/components/BookCover';
 import { IconHeart } from '@/components/Icons';
 import { Button, Caps, Chip, Display, ErrorNote, Italic, Rule, tap } from '@/components/ui';
-import { api, Book, getBase } from '@/api';
+import { api, Book, getBase, Verdict } from '@/api';
 import Shelf3D from '@/components/Shelf3D';
 import CollectionsView from '@/components/CollectionsView';
+import { stars, VerdictBadge } from '@/components/FriendVerdicts';
 import { colors, fonts } from '@/theme';
 
 type Filter = 'all' | 'favourites' | 'reading' | 'tbr' | 'wishlist' | string;
@@ -32,13 +33,27 @@ export default function Library() {
   const [error, setError] = useState('');
 
   const [gaps, setGaps] = useState<Gap[]>([]);
+  const [verdicts, setVerdicts] = useState<Record<string, Verdict[]>>({});
   const load = useCallback(async () => {
     try {
-      setBooks(await api.books('all'));
+      const all = await api.books('all');
+      setBooks(all);
+      // friends' ratings for your books (wishlist + TBR first), keyed by title|author
+      const want = all.filter((b) => b.status === 'wishlist' || b.tbr).concat(all.filter((b) => !(b.status === 'wishlist' || b.tbr)));
+      api
+        .friendVerdicts(want.slice(0, 300).map((b) => ({ title: b.title, author: b.author })))
+        .then((r) => setVerdicts((cur) => ({ ...cur, ...Object.fromEntries(want.slice(0, 300).map((b, i) => [`${b.title}|${b.author}`, r.verdicts[i]]).filter(([, v]) => (v as Verdict[]).length)) })))
+        .catch(() => {});
       // collection gaps ("to find") are wishes the Butler adds for you
       api
         .collections()
-        .then((r) => setGaps(r.gaps.flatMap((g: any) => g.missing.map((m: any) => ({ ...m, collection: g.collection, author: g.author })))))
+        .then((r) => {
+          const gs: Gap[] = r.gaps.flatMap((g: any) => g.missing.map((m: any) => ({ ...m, collection: g.collection, author: g.author })));
+          setGaps(gs);
+          return api.friendVerdicts(gs.map((g) => ({ title: g.title, author: g.author }))).then((v) =>
+            setVerdicts((cur) => ({ ...cur, ...Object.fromEntries(gs.map((g, i) => [`${g.title}|${g.author}`, v.verdicts[i]]).filter(([, x]) => (x as Verdict[]).length)) })),
+          );
+        })
         .catch(() => {});
       setError('');
     } catch (e: any) {
@@ -153,6 +168,7 @@ export default function Library() {
                 <Text style={s.gapNum}>{g.index}</Text>
                 <Text numberOfLines={3} style={s.gapTitle}>{g.title}</Text>
                 <Caps style={{ fontSize: 7, color: colors.gold, marginTop: 4 }} numberOfLines={1}>{g.collection}</Caps>
+                <VerdictBadge verdicts={verdicts[`${g.title}|${g.author}`]} />
               </Pressable>
             ))}
           </ScrollView>
@@ -203,7 +219,8 @@ export default function Library() {
     );
   }
 
-  if (view === 'shelf' && base) {
+  // wishlist and TBR read best as a gallery (with friends' ratings under each cover)
+  if (view === 'shelf' && base && !['wishlist', 'tbr'].includes(filter)) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.paper }}>
         {header}
@@ -254,6 +271,9 @@ export default function Library() {
               <Text numberOfLines={1} style={s.gridAuthor}>
                 {item.author}
               </Text>
+              {!!item.rating && <Text style={s.mine}>{`you ${stars(item.rating)}`}</Text>}
+              {item.read_state === 'dnf' && <Text style={[s.mine, { color: '#D98B72' }]}>did not finish</Text>}
+              <VerdictBadge verdicts={verdicts[`${item.title}|${item.author}`]} />
               {item.reading && (
                 <View style={s.progressTrack}>
                   <View style={[s.progressFill, { width: `${Math.round(item.progress * 100)}%` }]} />
@@ -268,6 +288,7 @@ export default function Library() {
 }
 
 const s = StyleSheet.create({
+  mine: { fontFamily: fonts.body, fontSize: 10.5, color: colors.owned, marginTop: 3 },
   gap: { width: 74, height: 108, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(242,181,58,0.55)', alignItems: 'center', justifyContent: 'center', padding: 4 },
   gapNum: { fontFamily: fonts.displayLight, fontSize: 24, color: colors.gold },
   gapTitle: { fontFamily: fonts.bodyItalic, fontSize: 9.5, color: colors.inkSoft, textAlign: 'center' },

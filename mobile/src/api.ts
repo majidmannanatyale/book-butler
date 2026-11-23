@@ -97,6 +97,10 @@ export type Book = {
   favourite: boolean;
   reading: boolean;
   tbr?: boolean;
+  rating?: number | null;
+  review?: string | null;
+  read_state?: '' | 'read' | 'dnf' | string;
+  finished_on?: string | null;
   progress: number;
   hours_read: number;
   notes?: string | null;
@@ -209,6 +213,8 @@ export type Sample = {
   free?: boolean;
 };
 
+export type Verdict = { friend: string; friend_id: number; rating: number | null; review: string | null; dnf: boolean };
+
 export type LibBook = { id: number | null; title: string; author: string; cover_url?: string | null; status: string; why?: string };
 
 // ---------- calls
@@ -235,6 +241,15 @@ export const api = {
     req<Book>(`/api/books/${id}`, { method: 'PATCH', body: JSON.stringify(b) }),
   deleteBook: (id: number) => req<{ ok: boolean }>(`/api/books/${id}`, { method: 'DELETE' }),
   reorder: (ids: number[]) => req('/api/books/reorder', { method: 'POST', body: JSON.stringify({ ids }) }),
+  checkDuplicate: (d: { title: string; author?: string; isbn?: string; edition?: string; binding?: string; publisher?: string; year?: number | null }) =>
+    req<{ exact: boolean; owned: number; copies: (Partial<Book> & { id: number; exact: boolean; why: string })[] }>(
+      `/api/books/check?${Object.entries(d)
+        .filter(([, x]) => x != null && x !== '')
+        .map(([k, x]) => `${k}=${encodeURIComponent(String(x))}`)
+        .join('&')}`,
+    ),
+  friendVerdicts: (items: { title: string; author: string }[]) =>
+    req<{ verdicts: Verdict[][] }>('/api/friends/verdicts', { method: 'POST', body: JSON.stringify({ items }) }),
   saveQuote: (title: string, author: string, to: 'wishlist' | 'tbr') =>
     req<{ book: Book; already: string | null }>('/api/quote/save', { method: 'POST', body: JSON.stringify({ title, author, to }) }, 30000),
   collections: () => req<{ collections: any[]; gaps: any[] }>('/api/collections'),

@@ -49,7 +49,8 @@ export default function RootLayout() {
         <StatusBar style="light" />
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }}>
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="book/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: colors.wall } }} />
+          <Stack.Screen name="photos/[id]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="book/[id]" options={{ animation: 'fade', contentStyle: { backgroundColor: colors.wall } }} />
           <Stack.Screen name="librarian" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="account" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="friend/[id]" options={{ animation: 'fade' }} />

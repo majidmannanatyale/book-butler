@@ -36,16 +36,91 @@ HEADERS = {"User-Agent": "BookFinderClassProject/0.1 (educational demo)"}
 
 # ------------------------------------------------------------------ faces
 
-def save_face(book_id: int, side: str, raw: bytes) -> dict:
+class BookBox(BaseModel):
+    x0: int = Field(ge=0, le=1000)
+    y0: int = Field(ge=0, le=1000)
+    x1: int = Field(ge=0, le=1000)
+    y1: int = Field(ge=0, le=1000)
+
+
+LOCATOR = ("Locate the BOOK in the photo (only the book itself: exclude hands, fingers, table and background). "
+           "Return its tight bounding box, coordinates normalised 0-1000 (x to the right, y down).")
+_LOC: Agent | None = None
+
+
+def _locator() -> Agent:
+    global _LOC
+    if _LOC is None:
+        _LOC = Agent(build_model(), output_type=BookBox, instructions=LOCATOR, name="book_locator",
+                     retries=1, model_settings=OpenAIResponsesModelSettings(openai_reasoning_effort="low"))
+    return _LOC
+
+
+async def locate_book(jpeg: bytes) -> tuple[tuple[int, int, int, int] | None, dict]:
+    """One small vision call (~1k tokens, ~$0.0001): where is the book, hands excluded."""
+    meter = Meter()
+    try:
+        run = await _locator().run([BinaryContent(data=jpeg, media_type="image/jpeg")],
+                                   usage_limits=UsageLimits(request_limit=2, output_tokens_limit=300))
+    except Exception:  # noqa: BLE001 - cropping is a nicety; never block saving the photo
+        return None, meter.as_dict()
+    meter.add("book_locator", run.usage)
+    b = run.output
+    return (b.x0, b.y0, b.x1, b.y1), meter.as_dict()
+
+
+def _crop_jpeg(jpeg: bytes, side: str, box) -> tuple[bytes, str]:
+    import cv2
+    import numpy as np
+
+    import crop
+    img = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
+    if box:
+        out, how = crop.crop_with_box(img, box, side)
+    else:
+        out, ok, _ = crop.crop_book(img, side)
+        how = "edges" if ok else "none"
+    ok, enc = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    return (enc.tobytes() if ok else jpeg), how
+
+
+async def save_face(book_id: int, side: str, raw: bytes) -> dict:
+    """Keep the original, then cut out just the book (AI finds it, OpenCV snaps to its edges)."""
+    import asyncio
     if side not in SIDES:
         raise ValueError("side must be front, back or spine")
     img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
-    img.thumbnail((900, 900))
+    img.thumbnail((1400, 1400))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=88)       # re-encoding drops EXIF/GPS
+    jpeg = buf.getvalue()
     FACES_DIR.mkdir(parents=True, exist_ok=True)
-    img.save(FACES_DIR / f"{book_id}_{side}.jpg", quality=86)   # re-encoding drops EXIF/GPS
+    (FACES_DIR / f"{book_id}_{side}_raw.jpg").write_bytes(jpeg)
+    small = _jpeg(jpeg, 768)
+    box, usage = await locate_book(small)
+    cut, how = await asyncio.to_thread(_crop_jpeg, jpeg, side, box)
+    im = Image.open(io.BytesIO(cut))
+    im.thumbnail((900, 900))
+    im.save(FACES_DIR / f"{book_id}_{side}.jpg", quality=86)
+    if usage.get("cost_usd"):
+        library.log_usage("crop", usage, f"{book_id}:{side}")
+    audit.append({"kind": "face_crop", "book_id": book_id, "side": side, "how": how, "usage": usage})
     b = library.get_book(book_id) or {}
     faces = sorted(set((b.get("faces") or []) + [side]))
     return library.update_book(book_id, {"faces": faces})
+
+
+async def recrop(book_id: int) -> list[str]:
+    """Re-run the crop on a book's saved originals (or its current photos)."""
+    done = []
+    for side in SIDES:
+        src = FACES_DIR / f"{book_id}_{side}_raw.jpg"
+        if not src.exists():
+            src = FACES_DIR / f"{book_id}_{side}.jpg"
+        if src.exists():
+            await save_face(book_id, side, src.read_bytes())
+            done.append(side)
+    return done
 
 
 def face_path(book_id: int, side: str):

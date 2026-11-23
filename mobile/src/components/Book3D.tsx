@@ -8,6 +8,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
 import { Book } from '@/api';
+import { pagesUrl, shadowTexture, texUrl, useTexture } from '@/components/tex';
 import { colors } from '@/theme';
 
 function clothColor(title: string) {
@@ -43,10 +44,10 @@ type Spin = { y: number; x: number; vy: number; dragging: boolean };
 function Model({ book, base, spin, spinnable }: { book: Book; base: string; spin: React.MutableRefObject<Spin>; spinnable: boolean }) {
   const g = useRef<THREE.Group>(null);
   const faces = book.faces || [];
-  const v = String(faces.length);
-  const front = useTex(faces.includes('front') ? `${base}/api/books/${book.id}/face/front.jpg?v=${v}` : book.cover_url);
-  const back = useTex(faces.includes('back') ? `${base}/api/books/${book.id}/face/back.jpg?v=${v}` : null);
-  const spine = useTex(faces.includes('spine') ? `${base}/api/books/${book.id}/face/spine.jpg?v=${v}` : `${base}/api/books/${book.id}/spine.png`);
+  const front = useTexture(texUrl(base, book, 'front'));
+  const back = useTexture(texUrl(base, book, 'back'));
+  const spine = useTexture(texUrl(base, book, 'spine'));
+  const pages = useTexture(pagesUrl(base));
   const cloth = clothColor(book.title);
 
   // proportions from the real book: height (cm) and page count -> thickness
@@ -56,8 +57,8 @@ function Model({ book, base, spin, spinnable }: { book: Book; base: string; spin
 
   // BoxGeometry faces: 0 +x page edges, 1 -x spine, 2 top, 3 bottom, 4 +z front cover, 5 -z back cover
   const mats = useMemo(() => {
-    const m = (c: string, r = 0.8) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
-    return [m('#EFE6D2', 0.95), m(cloth), m('#EFE6D2', 0.95), m('#EFE6D2', 0.95), m(cloth, 0.7), m(cloth)];
+    const m = (c: string, r = 0.8) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: 0.02 });
+    return [m('#EFE6D2', 0.95), m(cloth), m('#EFE6D2', 0.95), m('#EFE6D2', 0.95), m(cloth, 0.6), m(cloth, 0.7)];
   }, [cloth]);
   useEffect(() => {
     const set = (i: number, t: THREE.Texture | null) => {
@@ -68,7 +69,11 @@ function Model({ book, base, spin, spinnable }: { book: Book; base: string; spin
     set(4, front);
     set(5, back);
     set(1, spine);
-  }, [front, back, spine, mats, cloth]);
+    [0, 2, 3].forEach((i) => {
+      mats[i].map = pages;
+      mats[i].needsUpdate = true;
+    });
+  }, [front, back, spine, pages, mats, cloth]);
 
   useFrame((state, dt) => {
     const s = spin.current;
@@ -93,11 +98,17 @@ function Model({ book, base, spin, spinnable }: { book: Book; base: string; spin
   });
 
   return (
-    <group ref={g}>
-      <mesh material={mats}>
-        <boxGeometry args={[T, H, W]} />
+    <>
+      <group ref={g}>
+        <mesh material={mats}>
+          <boxGeometry args={[T, H, W]} />
+        </mesh>
+      </group>
+      <mesh position={[0, -H / 2 - 0.25, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[W * 2.2, W * 1.1]} />
+        <meshBasicMaterial map={shadowTexture()} transparent opacity={0.85} depthWrite={false} />
       </mesh>
-    </group>
+    </>
   );
 }
 
@@ -146,12 +157,14 @@ export default function Book3D({ book, base, height = 330 }: { book: Book; base:
         </View>
       )}
       <Canvas
+        dpr={[1, 2]}
+        gl={{ antialias: true }}
         camera={{ fov: 35, position: [0, 0.2, 6.2] }}
         style={{ flex: 1, backgroundColor: 'transparent' }}
         onCreated={() => setTimeout(() => setReady(true), 250)}
       >
         <ambientLight intensity={0.65} color="#A9CDBE" />
-        <directionalLight position={[2, 3, 5]} intensity={1.3} color="#FFE6B0" />
+        <directionalLight position={[1.5, 2.5, 6]} intensity={1.9} color="#FFE9C2" />
         <directionalLight position={[-3, 1, -4]} intensity={0.5} color="#9FC3F0" />
         <pointLight position={[0, 3, 2]} intensity={5} distance={8} color="#F2B53A" />
         <Model book={book} base={base} spin={spin} spinnable={spinnable} />

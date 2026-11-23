@@ -1,11 +1,11 @@
 // Four ways to add a book: search, ISBN, photograph the copyright page
 // (the Cataloguer agent reads it, then Open Library verifies), or by hand.
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useIsFocused, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import BookCover from '@/components/BookCover';
 import GuidedCamera from '@/components/GuidedCamera';
@@ -268,9 +268,31 @@ function DraftForm({ initial, onDone, onSaved }: { initial: Partial<Draft>; onDo
   );
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
+  const [dup, setDup] = useState<Awaited<ReturnType<typeof api.checkDuplicate>> | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  // "Do I already own this?" — checked the moment the book is read, and again as details change
+  useEffect(() => {
+    if (!v.title?.trim()) return setDup(null);
+    const t = setTimeout(() => {
+      api
+        .checkDuplicate({ title: v.title, author: v.author, isbn: v.isbn, edition: v.edition, binding: v.binding, publisher: v.publisher, year: Number(v.year) || null })
+        .then((r) => {
+          setDup(r.copies.length ? r : null);
+          setConfirmed(false);
+        })
+        .catch(() => {});
+    }, 350);
+    return () => clearTimeout(t);
+  }, [v.title, v.author, v.isbn, v.edition, v.binding, v.publisher, v.year]);
   const save = async (status: 'owned' | 'wishlist') => {
     if (!v.title?.trim()) {
       setNote('A title, at least.');
+      return;
+    }
+    if (status === 'owned' && dup?.exact && !confirmed) {
+      tap();
+      setConfirmed(true);
+      setNote('You already own this exact edition. Tap again to add another copy.');
       return;
     }
     setBusy(true);
@@ -304,6 +326,21 @@ function DraftForm({ initial, onDone, onSaved }: { initial: Partial<Draft>; onDo
   };
   return (
     <View>
+      {dup && (
+        <Animated.View entering={FadeInDown.duration(350)} style={[s.dup, dup.exact && s.dupExact]}>
+          <Caps style={{ color: dup.exact ? colors.paper : colors.gold }}>
+            {dup.exact ? 'Already on your shelves' : `You own ${dup.owned === 1 ? 'another edition' : `${dup.owned} other editions`}`}
+          </Caps>
+          {dup.copies.slice(0, 3).map((c) => (
+            <Pressable key={c.id} onPress={() => { tap(); router.push(`/book/${c.id}`); }} style={s.dupRow} accessibilityRole="button">
+              <Text style={[s.dupText, dup.exact && { color: colors.paper }]} numberOfLines={1}>
+                {`${c.title} · ${[c.edition, c.binding, c.year].filter(Boolean).join(', ') || 'edition unknown'}`}
+              </Text>
+              <Caps style={{ fontSize: 8, color: dup.exact ? colors.paper : colors.inkSoft }}>{`${c.status === 'wishlist' ? 'wishlist' : c.why} · open →`}</Caps>
+            </Pressable>
+          ))}
+        </Animated.View>
+      )}
       {FIELDS.map(([k, label]) => (
         <View key={k} style={{ marginBottom: 10 }}>
           <Caps style={{ fontSize: 9 }}>{label}</Caps>
@@ -317,7 +354,7 @@ function DraftForm({ initial, onDone, onSaved }: { initial: Partial<Draft>; onDo
         </View>
       ))}
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-        <Button label="Add to library" style={{ flex: 1 }} busy={busy} onPress={() => save('owned')} />
+        <Button label={dup?.exact ? (confirmed ? 'Add another copy' : 'Add anyway?') : 'Add to library'} style={{ flex: 1 }} busy={busy} onPress={() => save('owned')} />
         <Button label="Wishlist" kind="outline" style={{ flex: 0.7 }} onPress={() => save('wishlist')} />
       </View>
       {!!note && <Italic style={{ marginTop: 10 }}>{note}</Italic>}
@@ -326,6 +363,10 @@ function DraftForm({ initial, onDone, onSaved }: { initial: Partial<Draft>; onDo
 }
 
 const s = StyleSheet.create({
+  dup: { borderWidth: 1, borderColor: 'rgba(242,181,58,0.6)', padding: 12, marginBottom: 14, gap: 6 },
+  dupExact: { backgroundColor: colors.gold, borderColor: colors.gold },
+  dupRow: { paddingVertical: 4 },
+  dupText: { fontFamily: fonts.body, fontSize: 15, color: colors.ink },
   input: {
     borderBottomWidth: 1,
     borderColor: colors.line,

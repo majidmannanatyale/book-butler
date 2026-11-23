@@ -5,6 +5,7 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
+import { pagesUrl, texUrl, useTexture } from '@/components/tex';
 import * as THREE from 'three';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
@@ -91,12 +92,11 @@ function BookMesh({
 }) {
   const ref = useRef<THREE.Group>(null);
   const faces = p.book.faces || [];
-  const spine = useSafeTexture(
-    faces.includes('spine') ? `${base}/api/books/${p.book.id}/face/spine.jpg?v=${faces.length}` : `${base}/api/books/${p.book.id}/spine.png`,
-  );
-  const cover = useSafeTexture(
-    selected ? (faces.includes('front') ? `${base}/api/books/${p.book.id}/face/front.jpg?v=${faces.length}` : p.book.cover_url) : null,
-  );
+  const spine = useTexture(texUrl(base, p.book, 'spine'));
+  // the cover and back load only once a book is taken off the shelf (then stay cached)
+  const cover = useTexture(selected ? texUrl(base, p.book, 'front') : null);
+  const back = useTexture(selected ? texUrl(base, p.book, 'back') : null);
+  const pagesTex = useTexture(pagesUrl(base));
   const cloth = clothColor(p.book.title);
   const born = useRef<number | null>(null);
   const centerY = (-(rows - 1) * SHELF_GAP) / 2 + 1.1;
@@ -123,10 +123,23 @@ function BookMesh({
 
   // BoxGeometry faces: 0 +x (front cover), 1 -x (back), 2 +y top, 3 -y bottom, 4 +z spine (towards you), 5 -z
   const mats = useMemo(() => {
-    const cloth_ = () => new THREE.MeshStandardMaterial({ color: cloth, roughness: 0.85 });
+    const cloth_ = () => new THREE.MeshStandardMaterial({ color: cloth, roughness: 0.78, metalness: 0.02 });
     const pages = () => new THREE.MeshStandardMaterial({ color: '#EFE6D2', roughness: 0.95 });
-    return [cloth_(), cloth_(), pages(), pages(), cloth_(), cloth_()];
+    return [cloth_(), cloth_(), pages(), pages(), cloth_(), pages()];
   }, [cloth]);
+  useEffect(() => {
+    [2, 3, 5].forEach((i) => {
+      mats[i].map = pagesTex;
+      mats[i].color.set('#ffffff');
+      mats[i].needsUpdate = true;
+    });
+  }, [pagesTex, mats]);
+  useEffect(() => {
+    const m = mats[1];
+    m.map = back;
+    m.color.set(back ? '#ffffff' : cloth);
+    m.needsUpdate = true;
+  }, [back, mats, cloth]);
   useEffect(() => {
     const m = mats[4];
     m.map = spine;

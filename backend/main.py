@@ -28,6 +28,7 @@ import importer
 import shopping
 import scouts
 import spines
+import textures
 import audit
 import library
 from config import APP_NAME, DAILY_BUDGET_USD, DATA_DIR, MODEL_NAME, ROOT, SCAN_MAX_BYTES, SCANS_PER_MINUTE
@@ -36,6 +37,7 @@ from llm import providers_available
 library.init_db()
 accounts.ensure_columns()
 accounts.ensure_seed()
+accounts.ensure_demo_verdicts()
 QUOTES = json.loads((DATA_DIR / "quotes.json").read_text(encoding="utf-8"))
 
 app = FastAPI(title=f"{APP_NAME} API")
@@ -155,6 +157,10 @@ class BookIn(BaseModel):
     favourite: bool = False
     reading: bool = False
     tbr: bool = False
+    rating: float | None = Field(default=None, ge=0, le=5)
+    review: str | None = Field(default=None, max_length=4000)
+    read_state: str = Field(default="", pattern="^(|read|dnf)$")
+    finished_on: str | None = Field(default=None, max_length=10)
     progress: float = 0
     hours_read: float = 0
     notes: str | None = None
@@ -177,6 +183,10 @@ class BookPatch(BaseModel):
     favourite: bool | None = None
     reading: bool | None = None
     tbr: bool | None = None
+    rating: float | None = Field(default=None, ge=0, le=5)
+    review: str | None = Field(default=None, max_length=4000)
+    read_state: str | None = Field(default=None, pattern="^(|read|dnf)$")
+    finished_on: str | None = Field(default=None, max_length=10)
     progress: float | None = None
     hours_read: float | None = None
     notes: str | None = None
@@ -185,6 +195,42 @@ class BookPatch(BaseModel):
 @app.get("/api/books")
 def books(status: str | None = "owned"):
     return library.list_books(None if status == "all" else status)
+
+
+class VerdictsIn(BaseModel):
+    items: list[dict] = Field(max_length=300)
+
+
+@app.post("/api/friends/verdicts")
+def friends_verdicts(body: VerdictsIn):
+    """What your friends rated each of these books (yours, your wishlist, your 'to find' gaps)."""
+    items = [{"title": str(i.get("title", ""))[:200], "author": str(i.get("author", ""))[:120]} for i in body.items]
+    return {"verdicts": accounts.friend_verdicts(items, library.uid())}
+
+
+@app.get("/api/books/check")
+def check_duplicate(title: str, author: str = "", isbn: str = "", edition: str = "", binding: str = "",
+                    publisher: str = "", year: int | None = None):
+    """Before adding: do you already have this book, and is it the very same edition? (plain code, $0)"""
+    import re as _re
+    clean = lambda x: _re.sub(r"[^0-9x]", "", (x or "").lower())
+    norm = lambda x: _re.sub(r"[^a-z0-9]", "", (x or "").lower())
+    out = []
+    for b in library.list_books(None):
+        if library.similarity(title, author, b["title"], b["author"]) < library.OWNED_THRESHOLD:
+            continue
+        same_isbn = bool(clean(isbn) and clean(isbn) == clean(b.get("isbn")))
+        same_print = (norm(edition) and norm(edition) == norm(b.get("edition"))) or \
+                     (norm(publisher) and norm(publisher) == norm(b.get("publisher")) and year and year == b.get("year"))
+        same_bind = not binding or not b.get("binding") or norm(binding) == norm(b.get("binding"))
+        exact = same_isbn or bool(same_print and same_bind) or (not isbn and not edition and not publisher)
+        out.append({"id": b["id"], "title": b["title"], "author": b["author"], "status": b["status"],
+                    "edition": b.get("edition"), "binding": b.get("binding"), "year": b.get("year"),
+                    "publisher": b.get("publisher"), "isbn": b.get("isbn"), "cover_url": b.get("cover_url"),
+                    "exact": exact, "why": "same ISBN" if same_isbn else "same edition" if exact else "another edition"})
+    out.sort(key=lambda x: (not x["exact"], x["status"] != "owned"))
+    return {"copies": out, "exact": any(c["exact"] and c["status"] == "owned" for c in out),
+            "owned": sum(1 for c in out if c["status"] == "owned")}
 
 
 @app.get("/api/books/{book_id}")
@@ -214,6 +260,39 @@ def book_spine(book_id: int):
         raise HTTPException(404, "No such book.")
     png = spines.spine_png(b["title"], b.get("author") or "")
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/books/{book_id}/tex/{side}")
+def book_texture(book_id: int, side: str):
+    """One face of a 3D book, pre-sized and cached: the reader's photo, the real cover, or a printed one."""
+    side = side.split(".")[0]
+    if side not in ("front", "back", "spine", "pages"):
+        raise HTTPException(404, "No such side.")
+    b = library.get_book_any(book_id)
+    if not b or (b.get("user_id") != library.uid() and not accounts.is_friend(library.uid(), b.get("user_id"))):
+        raise HTTPException(404, "No such book.")
+    data, mt = textures.texture(b, side)
+    return Response(content=data, media_type=mt, headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/api/tex/pages.jpg")
+def page_texture():
+    return Response(content=textures.page_edges(), media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.on_event("startup")
+def _prewarm_textures():
+    """Fetch every cover in the background so the first showcase is already fast."""
+    import threading
+
+    def run():
+        try:
+            with library.db() as con:
+                rows = con.execute("SELECT cover_url FROM books WHERE cover_url IS NOT NULL").fetchall()
+            textures.prewarm([{"cover_url": r[0]} for r in rows])
+        except Exception:  # noqa: BLE001
+            pass
+    threading.Thread(target=run, daemon=True).start()
 
 
 @app.patch("/api/books/{book_id}")
@@ -381,13 +460,20 @@ class FaceIn(BaseModel):
 
 
 @app.post("/api/books/{book_id}/faces/{side}")
-def upload_face(book_id: int, side: str, body: FaceIn):
+async def upload_face(book_id: int, side: str, body: FaceIn):
     """The user's own photo of a book's front / back / spine — the 3D model wears it."""
     if not library.get_book(book_id):
         raise HTTPException(404, "No such book.")
     if side not in extras.SIDES:
         raise HTTPException(400, "side must be front, back or spine")
-    return extras.save_face(book_id, side, _decode(ImageIn(image_b64=body.image_b64)))
+    return await extras.save_face(book_id, side, _decode(ImageIn(image_b64=body.image_b64)))
+
+
+@app.post("/api/books/{book_id}/recrop")
+async def recrop_faces(book_id: int):
+    if not library.get_book(book_id):
+        raise HTTPException(404, "No such book.")
+    return {"sides": await extras.recrop(book_id), "book": library.get_book(book_id)}
 
 
 @app.get("/api/books/{book_id}/face/{side}.jpg")

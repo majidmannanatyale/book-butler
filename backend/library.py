@@ -103,7 +103,8 @@ def uid() -> int:
 
 BOOK_FIELDS = ("title", "author", "year", "publisher", "binding", "edition", "height_cm", "pages",
                "isbn", "cover_url", "subjects", "collection", "series_index", "status", "favourite",
-               "reading", "progress", "hours_read", "notes", "position", "faces", "tbr")
+               "reading", "progress", "hours_read", "notes", "position", "faces", "tbr",
+               "rating", "review", "read_state", "finished_on")
 
 
 # ----------------------------------------------------------------- database
@@ -133,6 +134,10 @@ def init_db(reset: bool = False) -> None:
         cols = {r[1] for r in con.execute("PRAGMA table_info(books)")}
         if "faces" not in cols:   # added later: which sides of the book the user photographed
             con.execute("ALTER TABLE books ADD COLUMN faces TEXT")
+        for col, ddl in (("rating", "REAL"), ("review", "TEXT"), ("read_state", "TEXT NOT NULL DEFAULT ''"),
+                         ("finished_on", "TEXT")):
+            if col not in cols:    # added later: quarter-star rating, a review, read / DNF
+                con.execute(f"ALTER TABLE books ADD COLUMN {col} {ddl}")
         if "tbr" not in cols:      # added later: on the to-be-read pile
             con.execute("ALTER TABLE books ADD COLUMN tbr INTEGER NOT NULL DEFAULT 0")
         if "user_id" not in cols:  # added later: whose book this is (1 = the demo reader)
@@ -379,6 +384,9 @@ def taste_profile(max_items: int = 12) -> str:
         for b in books for s in (b.get("subjects") or [])[:5] for part in s.split(",")
         if ":" not in part and part.strip().lower() not in generic and len(part.strip()) > 2)
     favs = [f'{b["title"]} ({b["author"]})' for b in books if b.get("favourite")]
+    loved = [f'{b["title"]} ({b["rating"]:g}★)' for b in sorted(books, key=lambda b: -(b.get("rating") or 0))
+             if (b.get("rating") or 0) >= 4][:max_items]
+    disliked = [b["title"] for b in books if b.get("read_state") == "dnf" or 0 < (b.get("rating") or 0) <= 2][:max_items]
     reading = [b["title"] for b in books if b.get("reading")]
     bindings = Counter(b.get("binding") or "unknown" for b in books)
     rt = ""

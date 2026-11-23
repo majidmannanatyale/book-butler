@@ -24,6 +24,8 @@ import { Button, Caps, ErrorNote, Italic, Ornament, Rule, tap } from '@/componen
 import { api, Book, bookCache, getBase } from '@/api';
 import Book3D from '@/components/Book3D';
 import SampleCard from '@/components/SampleCard';
+import RatingReview from '@/components/RatingReview';
+import FriendVerdicts from '@/components/FriendVerdicts';
 import { colors, fonts } from '@/theme';
 
 const MUSEUM_WALL = '#0B1110'; // the deep green-black of a gallery wall at night
@@ -98,7 +100,8 @@ export default function Showcase() {
   };
 
   const { height: screenH } = useWindowDimensions();
-  const wallH = Math.max(420, screenH * 0.72);
+  const bookH = Math.max(280, Math.min(380, screenH * 0.44));
+  const wallH = bookH + 24;
   const unread = !!book && (book.status === 'wishlist' || (!book.reading && !(book.hours_read > 0) && !(book.progress > 0)));
   const [base, setBaseUrl] = useState('');
   useEffect(() => {
@@ -174,10 +177,10 @@ export default function Showcase() {
             <View style={{ height: wallH, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10 }}>
               <View style={{ width: '58%' }}>
                 {base && settled ? (
-                  <Book3D book={book} base={base} height={Math.min(300, wallH * 0.62)} />
+                  <Book3D book={book} base={base} height={bookH} />
                 ) : (
-                  <View style={{ height: Math.min(300, wallH * 0.62), alignItems: 'center', justifyContent: 'center' }}>
-                    <BookCover title={book.title} author={book.author} uri={book.cover_url} width={Math.min(300, wallH * 0.62) / 1.5} />
+                  <View style={{ height: bookH, alignItems: 'center', justifyContent: 'center' }}>
+                    <BookCover title={book.title} author={book.author} uri={book.cover_url} width={bookH / 1.9} />
                   </View>
                 )}
               </View>
@@ -194,13 +197,15 @@ export default function Showcase() {
                 </Text>
               </Animated.View>
             </View>
-            <Italic color={colors.wallMuted} style={{ textAlign: 'center', fontSize: 12, opacity: 0.6, marginTop: -16 }}>
-              {['front', 'back', 'spine'].every((f) => (book.faces || []).includes(f))
-                ? 'drag the book to turn it all the way around'
-                : 'photograph its front, back and spine (Add → Camera) to turn it in 3D'}
-            </Italic>
-            <View style={{ alignItems: 'center', marginTop: 18 }}>
-              <Caps color={colors.wallMuted} style={{ fontSize: 8.5, opacity: 0.5 }}>scroll for details</Caps>
+            <View style={s.under}>
+              <Italic color={colors.wallMuted} style={{ fontSize: 12, opacity: 0.7, flex: 1 }}>
+                {['front', 'back', 'spine'].every((f) => (book.faces || []).includes(f))
+                  ? 'Drag the book to turn it all the way around.'
+                  : 'Photograph its front, back and spine to turn it in 3D.'}
+              </Italic>
+              <Pressable onPress={() => { tap(); router.push(`/photos/${book.id}`); }} style={s.photoBtn} accessibilityRole="button">
+                <Caps style={{ color: colors.gold, fontSize: 9 }}>{(book.faces || []).length ? 'Update photos' : 'Add photos'}</Caps>
+              </Pressable>
             </View>
 
             {/* placard */}
@@ -217,6 +222,7 @@ export default function Showcase() {
                   .filter(Boolean)
                   .join(' · ')}
               </Text>
+              <FriendVerdicts title={book.title} author={book.author} />
               {unread && <SampleCard dark={false} load={() => api.sampleForBook(book.id)} />}
               <Ornament />
               <View style={s.actions}>
@@ -246,6 +252,15 @@ export default function Showcase() {
                 </View>
               )}
 
+              {book.status === 'owned' && (
+                <RatingReview
+                  key={book.id}
+                  rating={book.rating}
+                  review={book.review}
+                  readState={book.read_state}
+                  onChange={(c) => patch(c as Partial<Book>)}
+                />
+              )}
               {edit ? (
                 <View style={{ marginTop: 16 }}>
                   {EDITABLE.map(([k, label, type]) => (
@@ -286,6 +301,8 @@ export default function Showcase() {
 }
 
 const s = StyleSheet.create({
+  under: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 22, marginTop: -6, marginBottom: 14 },
+  photoBtn: { borderWidth: 1, borderColor: 'rgba(242,181,58,0.6)', paddingVertical: 8, paddingHorizontal: 12 },
   backCover: {
     width: 190,
     height: 285,

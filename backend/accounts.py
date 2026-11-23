@@ -254,3 +254,73 @@ def ensure_seed() -> None:
                                            "hours_read": 6 + (pos * 3) % 11})
             con.execute("INSERT OR IGNORE INTO friendships(user_id, friend_id) VALUES (1, ?)", (fid,))
             con.execute("INSERT OR IGNORE INTO friendships(user_id, friend_id) VALUES (?, 1)", (fid,))
+
+
+# Demo friends' verdicts, so "what your friends thought" has something to show.
+DEMO_VERDICTS = {
+    "sam": {
+        "The Name of the Wind": (4.75, "The best magic-school book that isn't the one you're thinking of."),
+        "Mistborn": (4.25, "Heist crew, but the vault is a god."),
+        "The Hobbit": (5, ""),
+        "Klara and the Sun": (3.5, "Quiet and sad in the Ishiguro way. Slow middle."),
+        "Jonathan Strange & Mr Norrell": (4.5, "Footnotes worth reading. If you liked Piranesi, yes."),
+        "Harry Potter and the Goblet of Fire": (4.75, "Where the series grows up."),
+        "The Return of the King": (4.5, ""),
+        "A Wizard of Earthsea": (4, "Short, strange, perfect."),
+        "Children of Dune": (3.25, "For completists. Leto II gets weird."),
+    },
+    "ada": {
+        "Anna Karenina": (5, "The train, the haymaking, Levin. All of it."),
+        "Villette": (4.25, "Darker and better than Jane Eyre, fight me."),
+        "The Idiot": (3.75, ""),
+        "North and South": (4.5, "Mr Thornton > Mr Darcy."),
+        "Mansfield Park": (3.5, "Fanny is better than her reputation."),
+        "The Goldfinch": (3.25, "Loved Boris, the last 100 pages lost me. Did not finish? Almost."),
+        "Brideshead Revisited": (4.5, ""),
+        "War and Peace": (0, "DNF at page 400. Will return. Probably."),
+        "Middlemarch": (4.75, "Dorothea's last chapter made me cry on a train."),
+        "Northanger Abbey": (4.5, "Austen laughing at gothic novels — the funniest one."),
+    },
+}
+
+
+def ensure_demo_verdicts() -> None:
+    """Give the demo friends ratings/reviews once (and Ada a copy of Northanger Abbey)."""
+    with library.db() as con:
+        for username, verdicts in DEMO_VERDICTS.items():
+            u = con.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+            if not u:
+                continue
+            fid = u[0]
+            if con.execute("SELECT COUNT(*) FROM books WHERE user_id=? AND rating IS NOT NULL", (fid,)).fetchone()[0]:
+                continue
+            have = {r[0] for r in con.execute("SELECT title FROM books WHERE user_id=?", (fid,))}
+            for title, (rating, review) in verdicts.items():
+                if title not in have:
+                    author = {"Northanger Abbey": "Jane Austen", "Children of Dune": "Frank Herbert"}.get(title)
+                    if not author:
+                        continue
+                    library._insert_book(con, {"title": title, "author": author, "status": "owned", "user_id": fid,
+                                               "cover_url": None, "position": 99})
+                con.execute("UPDATE books SET rating=?, review=?, read_state=? WHERE user_id=? AND title=?",
+                            (rating or None, review or None, "dnf" if rating == 0 else "read", fid, title))
+
+
+def friend_verdicts(items: list[dict], user_id: int) -> list[list[dict]]:
+    """For each {title, author}, what your friends rated it (plain code, $0)."""
+    ids = [f["id"] for f in friends(user_id)]
+    if not ids:
+        return [[] for _ in items]
+    with library.db() as con:
+        rows = con.execute(
+            f"SELECT b.title, b.author, b.rating, b.review, b.read_state, u.display_name, u.id FROM books b "
+            f"JOIN users u ON u.id=b.user_id WHERE b.user_id IN ({','.join('?' * len(ids))}) "
+            f"AND (b.rating IS NOT NULL OR b.read_state='dnf' OR (b.review IS NOT NULL AND b.review!=''))", ids).fetchall()
+    out = []
+    for it in items:
+        hits = []
+        for t, a, rating, review, state, name, fid in rows:
+            if library.similarity(it.get("title", ""), it.get("author", ""), t, a) >= library.OWNED_THRESHOLD:
+                hits.append({"friend": name, "friend_id": fid, "rating": rating, "review": review, "dnf": state == "dnf"})
+        out.append(hits)
+    return out

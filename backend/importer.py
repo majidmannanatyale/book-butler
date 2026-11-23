@@ -63,7 +63,13 @@ def parse(text: str) -> tuple[str, list[dict]]:
                 "status": "wishlist" if shelf == "to-read" else "owned",
                 "reading": shelf == "currently-reading",
                 "favourite": (_int(g.get("my rating")) or 0) >= 5,
-                "notes": (g.get("my review") or "")[:300] or None,
+                # keep what other apps drop: your rating, your review, when you finished it
+                "rating": float(_int(g.get("my rating"))) if _int(g.get("my rating")) else None,
+                "review": (re.sub(r"<br\s*/?>", "\n", g.get("my review") or "")[:4000]) or None,
+                "read_state": "read" if shelf == "read" else ("dnf" if shelf in ("dnf", "did-not-finish", "abandoned") else ""),
+                "finished_on": (g.get("date read") or "").replace("/", "-")[:10] or None,
+                "tbr": shelf == "to-read",
+                "notes": None,
             })
         elif source in ("libib", "generic"):
             isbn = _clean_isbn(g.get("ean_isbn13")) or _clean_isbn(g.get("upc_isbn10")) or _clean_isbn(g.get("isbn"))
@@ -81,6 +87,10 @@ def parse(text: str) -> tuple[str, list[dict]]:
                 "pages": _int(g.get("length")) or _int(g.get("pages")),
                 "status": "wishlist" if "wish" in status_txt or "want" in status_txt else "owned",
                 "reading": "in progress" in status_txt or "reading" in status_txt,
+                "rating": float(_int(g.get("rating"))) if _int(g.get("rating")) else None,
+                "review": (g.get("review") or "")[:4000] or None,
+                "read_state": "read" if "completed" in status_txt or status_txt == "read" else ("dnf" if "abandon" in status_txt else ""),
+                "tbr": "not begun" in status_txt,
                 "notes": (g.get("notes") or "")[:300] or None,
             })
     return source, [r for r in rows if r["title"]]

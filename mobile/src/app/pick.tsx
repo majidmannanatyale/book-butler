@@ -9,6 +9,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import BookCover from '@/components/BookCover';
 import SampleCard from '@/components/SampleCard';
 import FindIt from '@/components/FindIt';
+import FriendVerdicts from '@/components/FriendVerdicts';
 import Stars from '@/components/Stars';
 import { IconClose } from '@/components/Icons';
 import { Button, Caps, ErrorNote, Italic, Ornament, tap } from '@/components/ui';
@@ -111,6 +112,7 @@ export default function Pick() {
         <FindIt title={p.title} author={p.author || ''} collectible={p.collectible === '1'} collectibleWhy={p.why} priceSeen={p.price} />
 
         <Ornament dark />
+        <FriendVerdicts title={p.title} author={p.author || ''} dark />
         <SampleCard load={() => api.sampleByTitle(p.title, p.author || '')} />
 
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 22 }}>
