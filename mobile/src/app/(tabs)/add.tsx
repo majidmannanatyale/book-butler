@@ -25,7 +25,7 @@ export default function Add() {
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insets.top + 18, paddingHorizontal: 20, paddingBottom: 60 }}>
         <Caps>A new acquisition</Caps>
         <Display>Add a Book</Display>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 14 }}>
+        <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 14 }}>
           <Chip label="Camera" active={mode === 'camera'} onPress={() => setMode('camera')} />
           <Chip label="Search" active={mode === 'search'} onPress={() => setMode('search')} />
           <Chip label="ISBN" active={mode === 'isbn'} onPress={() => setMode('isbn')} />

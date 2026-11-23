@@ -82,11 +82,11 @@ export default function Librarian() {
           <Animated.View key={i} entering={FadeInUp.duration(400)} style={m.role === 'reader' ? s.reader : s.librarian}>
             <Text style={m.role === 'reader' ? s.readerText : s.librarianText}>{m.text}</Text>
             {!!m.books?.length && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingTop: 12 }}>
+              <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingTop: 12 }}>
                 {m.books.map((b) => (
                   <Pressable
                     key={b.title}
-                    style={{ width: 64 }}
+                    style={{ width: 76 }}
                     accessibilityLabel={`Open ${b.title}`}
                     onPress={() => {
                       tap();
@@ -95,7 +95,7 @@ export default function Librarian() {
                     }}
                   >
                     <BookCover title={b.title} author={b.author} uri={b.cover_url} width={64} />
-                    <Caps numberOfLines={1} style={{ fontSize: 7.5, marginTop: 4, color: b.status === 'owned' ? colors.owned : colors.gold }}>
+                    <Caps numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 7.5, marginTop: 4, color: b.status === 'owned' ? colors.owned : colors.gold }}>
                       {b.status === 'owned' ? 'on your shelf' : b.status === 'wishlist' ? 'wishlist' : 'find it →'}
                     </Caps>
                   </Pressable>

@@ -126,7 +126,7 @@ export default function Library() {
         style={s.search}
         accessibilityLabel="Search your library"
       />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 12 }}>
+      <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 12 }}>
         {(['all', 'favourites', 'reading', 'tbr', 'wishlist'] as const).map((f) => (
           <Chip key={f} label={f === 'reading' ? 'Reading now' : f === 'tbr' ? 'To be read' : f} active={filter === f} onPress={() => setFilter(f)} />
         ))}
@@ -157,7 +157,7 @@ export default function Library() {
       {filter === 'wishlist' && gaps.length > 0 && (
         <View style={{ paddingTop: 12 }}>
           <Caps style={{ color: colors.ink }}>{`To find · ${gaps.length} from your collections`}</Caps>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 10 }}>
+          <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 10 }}>
             {gaps.map((g) => (
               <Pressable
                 key={`${g.collection}${g.index}`}
@@ -217,7 +217,7 @@ export default function Library() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.paper }}>
         {header}
-        <CollectionsView books={books} />
+        <CollectionsView books={books} only={filter === 'all' && !q ? undefined : visible} />
       </View>
     );
   }

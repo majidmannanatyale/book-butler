@@ -221,7 +221,7 @@ export default function ARCharacters() {
           <Text style={s.epithet}>{ch.epithet}</Text>
           <Text style={s.line}>{`“${ch.line}”`}</Text>
           <Text style={s.small}>{`Marble, after the classical manner · an original line in their spirit · ${BUST_CREDIT}`}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingTop: 10 }}>
+          <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingTop: 10 }}>
             {cast!.map((c, k) => (
               <Pressable key={c.name} onPress={() => { tap(); setI(k); }} style={[s.pill, k === i && s.pillOn]}>
                 <Text style={[s.pillText, k === i && { color: colors.cream }]}>{c.name}</Text>

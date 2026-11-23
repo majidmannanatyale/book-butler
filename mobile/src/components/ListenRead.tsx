@@ -33,7 +33,7 @@ export default function ListenRead({ title, author, dark = false }: { title: str
           <Caps style={{ color: colors.gold, fontSize: 9 }}>open →</Caps>
         </Pressable>
       ))}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 10 }}>
+      <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 10 }}>
         {data.links.map((l) => (
           <Pressable key={l.name} onPress={() => open(l.url)} style={s.chip} accessibilityRole="link" accessibilityLabel={`${l.name}: ${l.detail}`}>
             <Text style={s.chipText}>{`${ICON[l.kind] || ''} ${l.name}`}</Text>

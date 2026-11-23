@@ -29,7 +29,9 @@ const surname = (a: string) => norm(a).split(' ').pop() || '';
 
 const W = 66;
 
-export default function CollectionsView({ books }: { books: Book[] }) {
+/** `books` is the whole library (so a series still counts every volume you own);
+ *  `only`, when a filter or search is on, limits the page to groups containing those books. */
+export default function CollectionsView({ books, only }: { books: Book[]; only?: Book[] }) {
   const router = useRouter();
   const [defs, setDefs] = useState<Def[]>([]);
   useEffect(() => {
@@ -77,6 +79,14 @@ export default function CollectionsView({ books }: { books: Book[] }) {
       .sort((a, b) => b[1].length - a[1].length);
   }, [books]);
 
+  // with a filter on (e.g. To be read), keep only the groups that contain a matching book
+  const ids = useMemo(() => (only ? new Set(only.map((b) => b.id)) : null), [only]);
+  const titles = useMemo(() => (only ? new Set(only.map((b) => norm(b.title))) : null), [only]);
+  const hits = (bs: Book[]) => !ids || bs.some((b) => ids.has(b.id));
+  const seriesShown = ids ? series.filter((sr) => sr.slots.some((sl) => hits(sl.copies) || titles!.has(norm(sl.title)))) : series;
+  const editionsShown = editions.filter(hits);
+  const authorsShown = authors.filter(([, bs]) => hits(bs));
+
   const open = (b: Book) => {
     tap();
     router.push(`/book/${b.id}`);
@@ -88,7 +98,7 @@ export default function CollectionsView({ books }: { books: Book[] }) {
 
   return (
     <ScrollView contentContainerStyle={{ paddingBottom: 50 }}>
-      {series.map((sr, i) => (
+      {seriesShown.map((sr, i) => (
         <Animated.View key={sr.name} entering={FadeInDown.delay(i * 70)} style={s.block}>
           <View style={s.head}>
             <View style={{ flex: 1 }}>
@@ -101,7 +111,7 @@ export default function CollectionsView({ books }: { books: Book[] }) {
             <View style={[s.barFill, { flex: sr.have }]} />
             <View style={{ flex: Math.max(0, sr.slots.length - sr.have) }} />
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 12 }}>
+          <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 12 }}>
             {sr.slots.map((sl) =>
               sl.copies.length ? (
                 sl.copies.map((b, k) => (
@@ -124,13 +134,13 @@ export default function CollectionsView({ books }: { books: Book[] }) {
         </Animated.View>
       ))}
 
-      {editions.length > 0 && (
+      {editionsShown.length > 0 && (
         <View style={s.block}>
           <Caps style={{ color: colors.ink }}>Several editions</Caps>
-          {editions.map((eds) => (
+          {editionsShown.map((eds) => (
             <View key={eds[0].id} style={{ marginTop: 12 }}>
               <Text style={s.name}>{`${eds[0].title} · ${eds.length} editions`}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 8 }}>
+              <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 8 }}>
                 {eds.map((b) => (
                   <Pressable key={b.id} onPress={() => open(b)} style={{ width: W + 10 }}>
                     <BookCover title={b.title} author={b.author} uri={coverFor(b)} width={W} />
@@ -143,13 +153,13 @@ export default function CollectionsView({ books }: { books: Book[] }) {
         </View>
       )}
 
-      {authors.length > 0 && (
+      {authorsShown.length > 0 && (
         <View style={s.block}>
           <Caps style={{ color: colors.ink }}>Authors you collect</Caps>
-          {authors.map(([author, bs]) => (
+          {authorsShown.map(([author, bs]) => (
             <View key={author} style={{ marginTop: 12 }}>
               <Text style={s.name}>{`${author} · ${bs.length}`}</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 8 }}>
+              <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 8 }}>
                 {bs.map((b) => (
                   <Pressable key={b.id} onPress={() => open(b)} style={{ width: W }}>
                     <BookCover title={b.title} author={b.author} uri={coverFor(b)} width={W} />
@@ -160,8 +170,10 @@ export default function CollectionsView({ books }: { books: Book[] }) {
           ))}
         </View>
       )}
-      {!series.length && !editions.length && !authors.length && (
-        <Italic style={{ textAlign: 'center', padding: 40 }}>Collections appear as your shelves grow.</Italic>
+      {!seriesShown.length && !editionsShown.length && !authorsShown.length && (
+        <Italic style={{ textAlign: 'center', padding: 40 }}>
+          {ids ? 'None of these books belong to a series or collection yet.' : 'Collections appear as your shelves grow.'}
+        </Italic>
       )}
     </ScrollView>
   );
