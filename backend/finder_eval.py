@@ -1,4 +1,4 @@
-"""Book Finder regression check on a REAL phone OCR dump (output/debug/ocr_raw.json).
+"""Book Finder regression check on a REAL phone OCR dump (test_data/ocr/pixel_shelf_17_books.json).
 
 Re-creates what the phone sends (same block geometry + merging as mobile/src/ondevice.ts,
 fast mode = upright + one turn), runs phase 1 (library match) and phase 2 (Scouts),
@@ -110,7 +110,7 @@ def score(found: list[tuple[str, str]]) -> tuple[int, list[str], list[str]]:
 
 async def main(fresh: bool, fast: bool) -> None:
     library.current_user.set(1)
-    raw = json.loads((ROOT / "output" / "debug" / "ocr_raw.json").read_text(encoding="utf-8"))
+    raw = json.loads((ROOT / "test_data" / "ocr" / "pixel_shelf_17_books.json").read_text(encoding="utf-8"))
     blocks = phone_blocks(raw, fast=fast)
     texts = [b["text"].replace("\n", " ") for b in blocks]
     print(f"{len(texts)} spine texts from the phone ({'fast' if fast else 'full'} mode)")
