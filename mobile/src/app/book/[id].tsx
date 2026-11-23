@@ -26,6 +26,7 @@ import Book3D from '@/components/Book3D';
 import SampleCard from '@/components/SampleCard';
 import RatingReview from '@/components/RatingReview';
 import FriendVerdicts from '@/components/FriendVerdicts';
+import ListenRead from '@/components/ListenRead';
 import { colors, fonts } from '@/theme';
 
 const MUSEUM_WALL = '#0B1110'; // the deep green-black of a gallery wall at night
@@ -203,6 +204,9 @@ export default function Showcase() {
                   ? 'Drag the book to turn it all the way around.'
                   : 'Photograph its front, back and spine to turn it in 3D.'}
               </Italic>
+              <Pressable onPress={() => { tap(); router.push(`/ar/${book.id}`); }} style={[s.photoBtn, { borderColor: colors.gold, backgroundColor: 'rgba(242,181,58,0.12)' }]} accessibilityRole="button" accessibilityLabel="Meet the characters">
+                <Caps style={{ color: colors.gold, fontSize: 9 }}>Characters</Caps>
+              </Pressable>
               <Pressable onPress={() => { tap(); router.push(`/photos/${book.id}`); }} style={s.photoBtn} accessibilityRole="button">
                 <Caps style={{ color: colors.gold, fontSize: 9 }}>{(book.faces || []).length ? 'Update photos' : 'Add photos'}</Caps>
               </Pressable>
@@ -224,6 +228,7 @@ export default function Showcase() {
               </Text>
               <FriendVerdicts title={book.title} author={book.author} />
               {unread && <SampleCard dark={false} load={() => api.sampleForBook(book.id)} />}
+              <ListenRead title={book.title} author={book.author} />
               <Ornament />
               <View style={s.actions}>
                 <Pressable onPress={() => { tap(); patch({ favourite: !book.favourite }); }} style={s.action} accessibilityLabel="Favourite">

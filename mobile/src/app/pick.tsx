@@ -10,6 +10,7 @@ import BookCover from '@/components/BookCover';
 import SampleCard from '@/components/SampleCard';
 import FindIt from '@/components/FindIt';
 import FriendVerdicts from '@/components/FriendVerdicts';
+import ListenRead from '@/components/ListenRead';
 import Stars from '@/components/Stars';
 import { IconClose } from '@/components/Icons';
 import { Button, Caps, ErrorNote, Italic, Ornament, tap } from '@/components/ui';
@@ -114,6 +115,7 @@ export default function Pick() {
         <Ornament dark />
         <FriendVerdicts title={p.title} author={p.author || ''} dark />
         <SampleCard load={() => api.sampleByTitle(p.title, p.author || '')} />
+        <ListenRead title={p.title} author={p.author || ''} dark />
 
         <View style={{ flexDirection: 'row', gap: 10, marginTop: 22 }}>
           {saved ? (

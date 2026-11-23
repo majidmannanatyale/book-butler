@@ -191,3 +191,32 @@ def prewarm(books: list[dict]) -> int:
             if fetch_cover(url):
                 n += 1
     return n
+
+
+def backfill_covers(limit: int = 400) -> dict:
+    """Books with no cover (or a dead one) get one from Open Library by title + author.
+    Runs in a background thread after an import and at startup; free, no AI."""
+    import library
+    with library.db() as con:
+        rows = con.execute("SELECT id, title, author, cover_url, user_id FROM books ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    fixed = tried = 0
+    for bid, title, author, url, user_id in rows:
+        if url and fetch_cover(url):
+            continue
+        tried += 1
+        try:
+            hits = library.ol_search(title=title, author=(author or "").split(" ")[-1], limit=3) or []
+        except Exception:  # noqa: BLE001
+            continue
+        for h in hits:
+            if h.get("cover_url") and library.similarity(title, author, h.get("title") or "", h.get("author")) >= 0.75 \
+                    and fetch_cover(h["cover_url"]):
+                with library.db() as con:
+                    con.execute("UPDATE books SET cover_url=? WHERE id=?", (h["cover_url"], bid))
+                fixed += 1
+                break
+    return {"tried": tried, "fixed": fixed}
+
+
+def backfill_in_background() -> None:
+    threading.Thread(target=backfill_covers, daemon=True).start()

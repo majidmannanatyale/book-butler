@@ -9,7 +9,8 @@ import { pagesUrl, texUrl, useTexture } from '@/components/tex';
 import * as THREE from 'three';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
-import { Book } from '@/api';
+import { api, Book, Decor } from '@/api';
+import Bust from '@/components/Bust';
 import { Caps, Italic, tap } from '@/components/ui';
 import { colors, fonts } from '@/theme';
 
@@ -203,16 +204,43 @@ function Bookcase({ rows }: { rows: number }) {
   );
 }
 
-function Rig({ rows, selected }: { rows: number; selected: boolean }) {
+function DecorRow({ decor, onPick }: { decor: Decor[]; onPick: (d: Decor) => void }) {
+  const topY = SHELF_GAP - 0.05 + 0.04;
+  const n = decor.length;
+  const S = 0.36;
+  return (
+    <group>
+      {decor.map((d, i) => {
+        const x = n === 1 ? 0 : -SHELF_W / 2 + 0.25 + (i * (SHELF_W - 0.5)) / (n - 1);
+        return (
+          <group
+            key={d.id}
+            position={[x, topY + 0.39 * S + 0.06, 0]}
+            rotation={[0, -x * 0.25, 0]}
+            scale={S}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPick(d);
+            }}
+          >
+            <Bust look={d.look} seed={d.id} />
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+function Rig({ rows, selected, extraTop = 0 }: { rows: number; selected: boolean; extraTop?: number }) {
   const { camera, size } = useThree();
   useFrame((state) => {
     const aspect = size.width / size.height;
     const fov = ((camera as THREE.PerspectiveCamera).fov * Math.PI) / 180;
-    const totalH = rows * SHELF_GAP + 0.6;
+    const totalH = rows * SHELF_GAP + 0.6 + extraTop;
     const zH = totalH / (2 * Math.tan(fov / 2));
     const zW = (SHELF_W + 0.6) / (2 * Math.tan(fov / 2) * aspect);
     const z = Math.max(zH, zW) * (selected ? 0.82 : 1);
-    const cy = (-(rows - 1) * SHELF_GAP) / 2 + 0.6;
+    const cy = (-(rows - 1) * SHELF_GAP) / 2 + 0.6 + extraTop / 2;
     const t = state.clock.elapsedTime;
     camera.position.x += (Math.sin(t * 0.25) * 0.35 - camera.position.x) * 0.05;
     camera.position.y += (cy + 0.25 - camera.position.y) * 0.05;
@@ -222,15 +250,22 @@ function Rig({ rows, selected }: { rows: number; selected: boolean }) {
   return null;
 }
 
-export default function Shelf3D({ books, base, onOpen, readOnly = false }: { books: Book[]; base: string; onOpen: (id: number) => void; readOnly?: boolean }) {
+export default function Shelf3D({ books, base, onOpen, readOnly = false, decor = [], onDecorChange }: { books: Book[]; base: string; onOpen: (id: number) => void; readOnly?: boolean; decor?: Decor[]; onDecorChange?: () => void }) {
   const [sel, setSel] = useState<number | null>(null);
+  const [bust, setBust] = useState<Decor | null>(null);
   const { placed, rows } = useMemo(() => layout(books), [books]);
   const chosen = books.find((b) => b.id === sel);
   return (
     <View style={{ flex: 1 }}>
       <Canvas
         camera={{ fov: 38, position: [0, -1.5, 9] }}
-        onPointerMissed={() => setSel(null)}
+        onPointerMissed={() => {
+          setSel(null);
+          setBust(null);
+        }}
+        onCreated={({ gl }) => {
+          gl.localClippingEnabled = true;
+        }}
         style={{ flex: 1, backgroundColor: colors.paper }}
       >
         <color attach="background" args={[colors.paper]} />
@@ -256,9 +291,42 @@ export default function Shelf3D({ books, base, onOpen, readOnly = false }: { boo
             />
           ))}
         </Suspense>
-        <Rig rows={rows} selected={sel != null} />
+        {decor.length > 0 && (
+          <Suspense fallback={null}>
+            <DecorRow
+              decor={decor}
+              onPick={(d) => {
+                tap();
+                setSel(null);
+                setBust(d);
+              }}
+            />
+          </Suspense>
+        )}
+        <Rig rows={rows} selected={sel != null} extraTop={decor.length ? 0.9 : 0} />
       </Canvas>
-      {chosen ? (
+      {bust && !chosen ? (
+        <Animated.View key={`b${bust.id}`} entering={FadeInDown.duration(400)} style={s.placard}>
+          <Caps style={{ color: colors.creamSoft, fontSize: 9 }}>{`from ${bust.book_title}`}</Caps>
+          <Text style={s.title}>{bust.name}</Text>
+          <Text style={s.meta}>{bust.epithet}</Text>
+          {!!bust.line && <Text style={[s.meta, { marginTop: 6 }]}>{`“${bust.line}”`}</Text>}
+          {!readOnly && (
+            <Pressable
+              onPress={async () => {
+                tap();
+                await api.removeDecor(bust.id).catch(() => {});
+                setBust(null);
+                onDecorChange?.();
+              }}
+              style={[s.open, { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.creamInk }]}
+              accessibilityRole="button"
+            >
+              <Caps style={{ color: colors.creamInk, fontSize: 10 }}>Take it off the shelf</Caps>
+            </Pressable>
+          )}
+        </Animated.View>
+      ) : chosen ? (
         <Animated.View key={chosen.id} entering={FadeInDown.duration(400)} style={s.placard}>
           <Caps style={{ color: colors.creamSoft, fontSize: 9 }}>{chosen.author}</Caps>
           <Text style={s.title} numberOfLines={2}>

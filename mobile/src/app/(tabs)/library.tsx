@@ -8,7 +8,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import BookCover from '@/components/BookCover';
 import { IconHeart } from '@/components/Icons';
 import { Button, Caps, Chip, Display, ErrorNote, Italic, Rule, tap } from '@/components/ui';
-import { api, Book, getBase, Verdict } from '@/api';
+import { api, Book, Decor, getBase, Verdict } from '@/api';
 import Shelf3D from '@/components/Shelf3D';
 import CollectionsView from '@/components/CollectionsView';
 import { stars, VerdictBadge } from '@/components/FriendVerdicts';
@@ -34,9 +34,12 @@ export default function Library() {
 
   const [gaps, setGaps] = useState<Gap[]>([]);
   const [verdicts, setVerdicts] = useState<Record<string, Verdict[]>>({});
+  const [decor, setDecor] = useState<Decor[]>([]);
+  const loadDecor = useCallback(() => api.decor().then(setDecor).catch(() => {}), []);
   const load = useCallback(async () => {
     try {
       const all = await api.books('all');
+      loadDecor();
       setBooks(all);
       // friends' ratings for your books (wishlist + TBR first), keyed by title|author
       const want = all.filter((b) => b.status === 'wishlist' || b.tbr).concat(all.filter((b) => !(b.status === 'wishlist' || b.tbr)));
@@ -225,7 +228,7 @@ export default function Library() {
       <View style={{ flex: 1, backgroundColor: colors.paper }}>
         {header}
         {visible.length > 0 ? (
-          <Shelf3D books={visible} base={base} onOpen={(id) => router.push(`/book/${id}`)} />
+          <Shelf3D books={visible} base={base} decor={filter === 'all' && !q ? decor : []} onDecorChange={loadDecor} onOpen={(id) => router.push(`/book/${id}`)} />
         ) : (
           <Italic style={{ textAlign: 'center', padding: 40 }}>Nothing on this shelf yet.</Italic>
         )}

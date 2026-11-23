@@ -17,6 +17,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
@@ -29,6 +30,9 @@ import shopping
 import scouts
 import spines
 import textures
+import listen
+import characters
+import bustmodel
 import audit
 import library
 from config import APP_NAME, DAILY_BUDGET_USD, DATA_DIR, MODEL_NAME, ROOT, SCAN_MAX_BYTES, SCANS_PER_MINUTE
@@ -38,9 +42,11 @@ library.init_db()
 accounts.ensure_columns()
 accounts.ensure_seed()
 accounts.ensure_demo_verdicts()
+characters.ensure_table()
 QUOTES = json.loads((DATA_DIR / "quotes.json").read_text(encoding="utf-8"))
 
 app = FastAPI(title=f"{APP_NAME} API")
+app.add_middleware(GZipMiddleware, minimum_size=2048)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # ------------------------------------------------------------------ who's asking
@@ -290,6 +296,7 @@ def _prewarm_textures():
             with library.db() as con:
                 rows = con.execute("SELECT cover_url FROM books WHERE cover_url IS NOT NULL").fetchall()
             textures.prewarm([{"cover_url": r[0]} for r in rows])
+            textures.backfill_covers()
         except Exception:  # noqa: BLE001
             pass
     threading.Thread(target=run, daemon=True).start()
@@ -645,7 +652,9 @@ def import_csv(request: Request, body: ImportIn):
     """Goodreads or Libib CSV export -> your library (no AI, $0)."""
     _rate_limit(request, per_minute=5)
     try:
-        return importer.import_csv(body.csv)
+        r = importer.import_csv(body.csv)
+        textures.backfill_in_background()   # find covers for anything that came without one
+        return r
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -656,6 +665,55 @@ def import_csv(request: Request, body: ImportIn):
 def where(title: str, author: str = "", isbn: str = ""):
     return {"links": shopping.where_to_buy(title, author, isbn),
             "friends": accounts.friends_owning(title, author, library.uid())}
+
+
+@app.get("/api/listen")
+async def listen_read(title: str, author: str = ""):
+    """Free audiobooks/ebooks first (LibriVox, Open Library), then Spotify/Audible/Kindle/Play/Libby links."""
+    import asyncio as _a
+    return await _a.to_thread(listen.listen_and_read, title[:200], author[:120])
+
+
+@app.get("/api/characters")
+async def book_characters(request: Request, title: str, author: str = ""):
+    """Up to four characters, described as a sculptor would carve them (one cached luna call)."""
+    _rate_limit(request, per_minute=10)
+    _budget_ok()
+    try:
+        return await characters.cast_for(title[:200], author[:120])
+    except Exception as exc:  # noqa: BLE001
+        raise _friendly(exc)
+
+
+class DecorIn(BaseModel):
+    book_id: int | None = None
+    book_title: str = Field(default="", max_length=200)
+    character: dict
+
+
+@app.get("/api/models/bust.bin")
+def bust_model():
+    """Head-and-shoulders mesh for the marble busts (scan by Lee Perry-Smith, CC BY 3.0)."""
+    return Response(content=bustmodel.bust_bin(), media_type="application/octet-stream",
+                    headers={"Cache-Control": "public, max-age=604800"})
+
+
+@app.get("/api/decor")
+def decor_list():
+    return characters.list_decor(library.uid())
+
+
+@app.post("/api/decor")
+def decor_add(body: DecorIn):
+    try:
+        return characters.add_decor(library.uid(), body.book_id, body.book_title, body.character)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/decor/{decor_id}")
+def decor_remove(decor_id: int):
+    return {"ok": characters.remove_decor(library.uid(), decor_id)}
 
 
 @app.get("/api/nearby")

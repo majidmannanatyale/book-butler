@@ -213,6 +213,10 @@ export type Sample = {
   free?: boolean;
 };
 
+export type ListenLink = { name: string; kind: string; url: string; detail: string; free?: boolean };
+
+export type Decor = { id: number; book_id: number | null; book_title: string; name: string; epithet: string; line: string; look: any };
+
 export type Verdict = { friend: string; friend_id: number; rating: number | null; review: string | null; dnf: boolean };
 
 export type LibBook = { id: number | null; title: string; author: string; cover_url?: string | null; status: string; why?: string };
@@ -248,6 +252,14 @@ export const api = {
         .map(([k, x]) => `${k}=${encodeURIComponent(String(x))}`)
         .join('&')}`,
     ),
+  listen: (title: string, author: string) =>
+    req<{ free: ListenLink[]; links: ListenLink[] }>(`/api/listen?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}`, undefined, 30000),
+  characters: (title: string, author: string) =>
+    req<{ characters: { name: string; epithet: string; line: string; look: any }[]; cached?: boolean }>(
+      `/api/characters?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}`, undefined, 45000),
+  decor: () => req<Decor[]>('/api/decor'),
+  addDecor: (d: { book_id: number | null; book_title: string; character: any }) => req<Decor>('/api/decor', { method: 'POST', body: JSON.stringify(d) }),
+  removeDecor: (id: number) => req<{ ok: boolean }>(`/api/decor/${id}`, { method: 'DELETE' }),
   friendVerdicts: (items: { title: string; author: string }[]) =>
     req<{ verdicts: Verdict[][] }>('/api/friends/verdicts', { method: 'POST', body: JSON.stringify({ items }) }),
   saveQuote: (title: string, author: string, to: 'wishlist' | 'tbr') =>
