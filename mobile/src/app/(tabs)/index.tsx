@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 
 import WindowLight from '@/components/WindowLight';
+import Logo from '@/components/Logo';
 import { refreshWidget } from '@/widget/refresh';
 import BookCover from '@/components/BookCover';
 import { Caps, Italic, Ornament, Rule, tap } from '@/components/ui';
@@ -63,6 +64,9 @@ export default function Home() {
     <View style={{ flex: 1 }}>
       <WindowLight />
       <ScrollView contentContainerStyle={{ paddingTop: insets.top + 28, paddingBottom: 40, paddingHorizontal: 28 }}>
+        <View style={{ alignItems: 'center', marginBottom: 6 }}>
+          <Logo size={54} />
+        </View>
         <Caps style={{ textAlign: 'center' }}>{name ? `${greeting()}, ${name}` : APP_NAME}</Caps>
         <Rule style={{ width: 28, alignSelf: 'center', marginTop: 10, backgroundColor: colors.sepia }} />
 

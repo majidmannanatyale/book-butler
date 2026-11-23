@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import { IconClose } from '@/components/Icons';
+import Logo from '@/components/Logo';
 import { Button, Caps, Chip, ErrorNote, Italic, Ornament, Rule, tap } from '@/components/ui';
 import { api, getToken, Profile, setToken, Stats } from '@/api';
 import { colors, fonts } from '@/theme';
@@ -44,7 +45,10 @@ export default function Account() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insets.top + 14, paddingHorizontal: 22, paddingBottom: 60 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Caps>The Book Butler</Caps>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Logo size={34} />
+            <Caps>The Book Butler</Caps>
+          </View>
           <Pressable onPress={() => router.back()} hitSlop={12} accessibilityLabel="Close">
             <IconClose color={colors.ink} />
           </Pressable>
