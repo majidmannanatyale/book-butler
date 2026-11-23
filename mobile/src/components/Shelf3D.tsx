@@ -14,22 +14,54 @@ import Bust from '@/components/Bust';
 import { Caps, Italic, tap } from '@/components/ui';
 import { colors, fonts } from '@/theme';
 
-const SHELF_W = 2.3; // inner width of one shelf (scene units ≈ 10 cm)
+const SHELF_W = 2.3; // inner width of one shelf for a small library (scene units ≈ 10 cm)
+/** Bigger libraries get a wider case, so 250 books fill the screen instead of one tall tower. */
+const shelfWidth = (n: number) => Math.max(SHELF_W, Math.sqrt(n * 0.15));
 const SHELF_GAP = 1.4; // vertical distance between shelves
 const DEPTH = 0.62;
 
+/** Books per bookcase. Bigger libraries get several cases you swipe between, so every
+ * spine stays readable and the phone only draws (and downloads) one case at a time. */
+export const PER_CASE = 150;
+
+const GROUPS = ['Favourites', 'Reading now', 'Collections', 'The rest'];
+function group(b: Book) {
+  return b.favourite ? 0 : b.reading ? 1 : b.collection ? 2 : 3;
+}
+
+/** Favourites first, then books being read, then collections (each series together, in
+ * reading order), then everything else. Inside each group the reader's own arrangement holds. */
+export function shelfOrder(books: Book[]): Book[] {
+  const firstSeen = new Map<string, number>();
+  books.forEach((b, i) => b.collection && !firstSeen.has(b.collection) && firstSeen.set(b.collection, i));
+  return books
+    .map((b, i) => ({ b, i }))
+    .sort((x, y) => {
+      const gx = group(x.b), gy = group(y.b);
+      if (gx !== gy) return gx - gy;
+      if (gx === 2) {
+        const cx = firstSeen.get(x.b.collection!)!, cy = firstSeen.get(y.b.collection!)!;
+        if (cx !== cy) return cx - cy;
+        const sx = x.b.series_index ?? 999, sy = y.b.series_index ?? 999;
+        if (sx !== sy) return sx - sy;
+      }
+      return x.i - y.i;
+    })
+    .map((e) => e.b);
+}
+
 type Placed = { book: Book; x: number; y: number; z: number; w: number; h: number; lean: number; i: number };
 
-function layout(books: Book[]): { placed: Placed[]; rows: number } {
+function layout(books: Book[], SW: number): { placed: Placed[]; rows: number } {
   const placed: Placed[] = [];
   let row = 0;
-  let x = -SHELF_W / 2;
+  let x = -SW / 2;
   books.forEach((b, i) => {
     const h = Math.min(1.25, Math.max(0.8, (b.height_cm || 20) / 20));
     const w = 0.11 + Math.min(1000, b.pages || 320) / 1000 * 0.2;
-    if (x + w > SHELF_W / 2) {
+    if (x + w > SW / 2) {
       row += 1;
-      x = -SHELF_W / 2;
+      x = -SW / 2;
     }
     // books never line up perfectly: a few mm forward or back
     const z = (((b.id * 2654435761) >>> 0) % 1000) / 1000 * 0.07 - 0.035;
@@ -41,7 +73,7 @@ function layout(books: Book[]): { placed: Placed[]; rows: number } {
   for (let r = 0; r < rows; r++) {
     const inRow = placed.filter((p) => Math.round((p.y - p.h / 2) / -SHELF_GAP) === r);
     const last = inRow[inRow.length - 1];
-    if (last && inRow.length > 3 && last.x + last.w / 2 < SHELF_W / 2 - 0.25) {
+    if (last && inRow.length > 3 && last.x + last.w / 2 < SW / 2 - 0.25) {
       last.lean = -0.16;
       last.x += 0.06;
     }
@@ -220,9 +252,9 @@ function panelTexture() {
   return _panel;
 }
 
-function Bookcase({ rows }: { rows: number }) {
+function Bookcase({ rows, SW }: { rows: number; SW: number }) {
   const wood = useMemo(() => new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: 0.55, metalness: 0.05 }), []);
-  const W = SHELF_W + 0.16;
+  const W = SW + 0.16;
   const H = rows * SHELF_GAP + 0.2;
   const topY = SHELF_GAP - 0.05;
   const midY = topY - H / 2;
@@ -267,14 +299,14 @@ function Bookcase({ rows }: { rows: number }) {
   );
 }
 
-function DecorRow({ decor, onPick }: { decor: Decor[]; onPick: (d: Decor) => void }) {
+function DecorRow({ decor, onPick, SW }: { decor: Decor[]; onPick: (d: Decor) => void; SW: number }) {
   const topY = SHELF_GAP - 0.05 + 0.04;
   const n = decor.length;
   const S = 0.36;
   return (
     <group>
       {decor.map((d, i) => {
-        const x = n === 1 ? 0 : -SHELF_W / 2 + 0.25 + (i * (SHELF_W - 0.5)) / (n - 1);
+        const x = n === 1 ? 0 : -SW / 2 + 0.25 + (i * (SW - 0.5)) / (n - 1);
         return (
           <group
             key={d.id}
@@ -294,14 +326,19 @@ function DecorRow({ decor, onPick }: { decor: Decor[]; onPick: (d: Decor) => voi
   );
 }
 
-function Rig({ rows, selected, extraTop = 0 }: { rows: number; selected: boolean; extraTop?: number }) {
-  const { camera, size } = useThree();
+function Rig({ rows, selected, extraTop = 0, SW }: { rows: number; selected: boolean; extraTop?: number; SW: number }) {
+  const { camera, size, scene } = useThree();
   useFrame((state) => {
+    // big libraries pull the camera far back; keep the fog just behind the case, never in front of it
+    if (scene.fog instanceof THREE.Fog) {
+      scene.fog.near = camera.position.z;
+      scene.fog.far = camera.position.z + 9;
+    }
     const aspect = size.width / size.height;
     const fov = ((camera as THREE.PerspectiveCamera).fov * Math.PI) / 180;
     const totalH = rows * SHELF_GAP + 0.6 + extraTop;
     const zH = totalH / (2 * Math.tan(fov / 2));
-    const zW = (SHELF_W + 0.6) / (2 * Math.tan(fov / 2) * aspect);
+    const zW = (SW + 0.6) / (2 * Math.tan(fov / 2) * aspect);
     const z = Math.max(zH, zW) * (selected ? 0.82 : 1);
     const cy = (-(rows - 1) * SHELF_GAP) / 2 + 0.6 + extraTop / 2;
     const t = state.clock.elapsedTime;
@@ -318,10 +355,55 @@ export default function Shelf3D({ books, base, onOpen, readOnly = false, decor =
   const [bust, setBust] = useState<Decor | null>(null);
   // the busts are decoration: let the books land first, then set them on top of the case
   const [decorOn, setDecorOn] = useState(false);
-  const { placed, rows } = useMemo(() => layout(books), [books]);
+  const ordered = useMemo(() => shelfOrder(books), [books]);
+  const cases = Math.max(1, Math.ceil(ordered.length / PER_CASE));
+  const [page, setPage] = useState(0);
+  const pg = Math.min(page, cases - 1);
+  const shown = useMemo(() => ordered.slice(pg * PER_CASE, (pg + 1) * PER_CASE), [ordered, pg]);
+  const SW = shelfWidth(shown.length);
+  const { placed, rows } = useMemo(() => layout(shown, SW), [shown, SW]);
   const chosen = books.find((b) => b.id === sel);
+  const label = Array.from(new Set(shown.map(group))).map((g) => GROUPS[g]).join(' · ');
+  const go = (d: number) => {
+    const next = Math.max(0, Math.min(cases - 1, pg + d));
+    if (next === pg) return;
+    tap();
+    setSel(null);
+    setBust(null);
+    setPage(next);
+  };
+  const touch = useRef<{ x: number; y: number } | null>(null);
   return (
-    <View style={{ flex: 1 }}>
+    <View
+      style={{ flex: 1 }}
+      // a sideways swipe moves to the next or previous bookcase (taps barely move, so they still pick books)
+      onTouchStart={(e) => {
+        touch.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+      }}
+      onTouchEnd={(e) => {
+        const t = touch.current;
+        touch.current = null;
+        if (!t || cases < 2) return;
+        const dx = e.nativeEvent.pageX - t.x, dy = e.nativeEvent.pageY - t.y;
+        if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
+      }}
+    >
+      {cases > 1 && (
+        <View style={s.cases}>
+          <Pressable onPress={() => go(-1)} disabled={pg === 0} hitSlop={12} accessibilityRole="button" accessibilityLabel="Previous bookcase">
+            <Text style={[s.arrow, pg === 0 && { opacity: 0.25 }]}>‹</Text>
+          </Pressable>
+          <View style={{ alignItems: 'center', flex: 1 }}>
+            <Caps style={{ color: colors.gold, fontSize: 10 }}>{`Case ${pg + 1} of ${cases}`}</Caps>
+            <Italic style={{ fontSize: 13 }} numberOfLines={1}>
+              {label}
+            </Italic>
+          </View>
+          <Pressable onPress={() => go(1)} disabled={pg === cases - 1} hitSlop={12} accessibilityRole="button" accessibilityLabel="Next bookcase">
+            <Text style={[s.arrow, pg === cases - 1 && { opacity: 0.25 }]}>›</Text>
+          </Pressable>
+        </View>
+      )}
       <Canvas
         camera={{ fov: 38, position: [0, -1.5, 9] }}
         onPointerMissed={() => {
@@ -341,7 +423,7 @@ export default function Shelf3D({ books, base, onOpen, readOnly = false, decor =
         <pointLight position={[0, 1.2, 2.5]} intensity={6} distance={9} color="#F2B53A" />
         <pointLight position={[0, -3.5, 2.5]} intensity={4} distance={8} color="#F7C863" />
         <Suspense fallback={null}>
-          <Bookcase rows={rows} />
+          <Bookcase rows={rows} SW={SW} />
           {placed.map((p) => (
             <BookMesh
               key={p.book.id}
@@ -360,6 +442,7 @@ export default function Shelf3D({ books, base, onOpen, readOnly = false, decor =
         {decorOn && decor.length > 0 && (
           <Suspense fallback={null}>
             <DecorRow
+              SW={SW}
               decor={decor}
               onPick={(d) => {
                 tap();
@@ -369,7 +452,7 @@ export default function Shelf3D({ books, base, onOpen, readOnly = false, decor =
             />
           </Suspense>
         )}
-        <Rig rows={rows} selected={sel != null} extraTop={decor.length ? 0.9 : 0} />
+        <Rig rows={rows} SW={SW} selected={sel != null} extraTop={decor.length ? 0.9 : 0} />
       </Canvas>
       {bust && !chosen ? (
         <Animated.View key={`b${bust.id}`} entering={FadeInDown.duration(400)} style={s.placard}>
@@ -420,4 +503,6 @@ const s = StyleSheet.create({
   meta: { fontFamily: fonts.bodyItalic, fontSize: 13.5, color: colors.creamSoft, marginTop: 2 },
   open: { marginTop: 12, backgroundColor: colors.creamInk, paddingVertical: 10, alignItems: 'center' },
   hint: { position: 'absolute', left: 0, right: 0, bottom: 18 },
+  cases: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 6 },
+  arrow: { fontFamily: fonts.display, fontSize: 34, color: colors.gold, paddingHorizontal: 10 },
 });

@@ -14,6 +14,7 @@ import { APP_NAME, colors, fonts } from '@/theme';
 import Tip, { tourDone } from '@/components/Tip';
 import { preloadBust, preloadMarble } from '@/components/Bust';
 import { preload } from '@/components/tex';
+import { PER_CASE, shelfOrder } from '@/components/Shelf3D';
 
 type Quote = { index: number; text: string; author: string; work: string };
 
@@ -55,7 +56,7 @@ export default function Home() {
       preloadBust();
       preloadMarble();
       Promise.all([getBase(), api.books('all')])
-        .then(([base, books]) => preload(base, books, 'spine'))
+        .then(([base, books]) => preload(base, shelfOrder(books).slice(0, PER_CASE), 'spine'))
         .catch(() => {});
     }, 1200);
     return () => clearTimeout(t);

@@ -262,7 +262,9 @@ def create_book(body: BookIn):
 def book_spine(book_id: int):
     """Spine artwork for the 3D bookshelf (cloth + gold-foil type), cached in memory."""
     b = library.get_book_any(book_id)
-    if not b or (b.get("user_id") != library.uid() and not accounts.is_friend(library.uid(), b.get("user_id"))):
+    # Image loaders on the phone send no login, so book art is served for any existing book (it is
+    # only the cover, spine and edges; nothing private like notes, ratings or reviews).
+    if not b:
         raise HTTPException(404, "No such book.")
     png = spines.spine_png(b["title"], b.get("author") or "")
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
@@ -275,7 +277,9 @@ def book_texture(book_id: int, side: str):
     if side not in ("front", "back", "spine", "pages"):
         raise HTTPException(404, "No such side.")
     b = library.get_book_any(book_id)
-    if not b or (b.get("user_id") != library.uid() and not accounts.is_friend(library.uid(), b.get("user_id"))):
+    # Image loaders on the phone send no login, so book art is served for any existing book (it is
+    # only the cover, spine and edges; nothing private like notes, ratings or reviews).
+    if not b:
         raise HTTPException(404, "No such book.")
     data, mt = textures.texture(b, side)
     return Response(content=data, media_type=mt, headers={"Cache-Control": "public, max-age=3600"})

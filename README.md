@@ -65,6 +65,49 @@ To start over, stop the backend and delete `data/library.db`. It rebuilds from t
 
 ---
 
+## For testers
+
+The app has no shared server. You run your own copy of the backend on your own computer, with your own API key.
+
+1. **Get the code and a key.** Clone this repo. Copy `.env.example` to `.env` and put **your own** key in it. Never use someone else's key.
+2. **Start the backend.** Follow [step 2 above](#2-backend-agents-and-the-mcp-server). Leave it running.
+3. **Build the sample account.** In a second terminal, in `backend` with the venv active:
+
+   ```powershell
+   python seed_tester.py
+   ```
+
+   This makes the account **`booktester`**, password **`butler-test-2026`**. It has 150 books, so you can try every feature without adding anything. It takes a few minutes, because it looks up every cover on Open Library. Run it again any time to reset the account.
+
+   Building it makes six small AI calls for the marble busts, about $0.001 on your key. Run `python seed_tester.py --no-busts` to skip them; everything else is free.
+4. **Open the app. Choose one:**
+   - **Android phone:** install the APK from the link you were sent. Put the phone on the **same Wi‑Fi** as your computer. In the app, open **Settings** and set the server address to `http://<your computer's IP>:8020`. On Windows, `ipconfig` shows the IP under "IPv4 Address". No development build or `expo start` is needed.
+   - **Browser, no phone:** run `npx expo start --web` in `mobile` (see step 3 above). Live camera scanning needs the phone; everything else works.
+5. **Log in** as `booktester`.
+
+**What's in the sample account:**
+
+| Feature | Where to look |
+|---|---|
+| 3D bookcase, marble busts on top | Library → Bookcase. Tap a spine or a bust. |
+| Series in reading order, with gaps | Library → Collections. Red Rising, Dungeon Crawler Carl, Harry Potter, The Lord of the Rings, Dune, Austen, Stormlight, Mistborn and more. Missing volumes show under **To find**. |
+| Favourites (13), reading now (4), to be read (9), wishlist (6) | The filter chips at the top of the Library |
+| Ratings and reviews (80 rated, one did-not-finish) | Open any finished book |
+| Friends (The Reader, Sam, Ada) | "Friends →" on the Library; their ratings appear on matching books |
+| Editions | Austen in Penguin Clothbound, Tolkien in Folio Society leather, Harry Potter in hardback |
+| AI and business books | *Artificial Intelligence: A Modern Approach* (reading now), *Co-Intelligence*, *Prediction Machines* and about 20 more |
+| Ask the Librarian | Try "what should I read after Red Rising?" or "which series am I missing books from?" |
+| Book Finder | Use the **Sample shelf** and **Safety test** buttons if you have no shelf to point it at |
+
+**Easter eggs.** A few books hide something in their notes or reading stats. Start with *The Hitchhiker's Guide to the Galaxy*, *The Remains of the Day*, *Batman: Year One*, *Ready Player One*, *Fahrenheit 451* and *Gödel, Escher, Bach*. Then check the wishlist.
+
+**If something looks wrong:**
+- **Screens are empty:** the backend isn't running, or the phone is on a different Wi‑Fi. Open `http://<your IP>:8020/api/health` in the phone's browser to check.
+- **The phone can't reach the computer even on the same Wi‑Fi:** Windows Firewall may be blocking port 8020. Allow Python through the firewall for private networks.
+- **AI features say the daily budget is used up:** the cap is $0.50 a day. Raise it with `DAILY_BUDGET_USD` in `.env`.
+
+---
+
 ## How it works
 
 ### Recording session (Android build)
