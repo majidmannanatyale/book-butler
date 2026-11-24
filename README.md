@@ -16,7 +16,7 @@ The rest of the app:
 - **Ask the Librarian** by text or voice; books it mentions appear as covers you can open.
 - **Accounts & friends**, reader types, a welcome tour and one-time tooltips.
 
-> 🎬 **Demo video (2–3 min):** _link coming soon_ <!-- DEMO_VIDEO_LINK: replace "link coming soon" with the recording URL -->
+> 🎬 **Demo video (3 min, recorded on my Pixel):** [docs/demo.mp4](docs/demo.mp4). Home, the 3D bookcase, a pick, the marble busts, the Librarian, collections, a live Book Finder session and adding a book by photo.
 
 > **Testing it? Use the sample library.** Most of the app only shows what it can do once there is a real collection in it: series with gaps, favourites, friends, ratings, marble busts. Unless you already have a large library of your own to import, log in with the ready-made tester account:
 >
