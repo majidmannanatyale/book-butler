@@ -29,6 +29,7 @@ import FriendVerdicts from '@/components/FriendVerdicts';
 import ListenRead from '@/components/ListenRead';
 import { colors, fonts } from '@/theme';
 import Tip from '@/components/Tip';
+import RelatedBooks from '@/components/RelatedBooks';
 
 const MUSEUM_WALL = '#0B1110'; // the deep green-black of a gallery wall at night
 
@@ -230,6 +231,7 @@ export default function Showcase() {
                   .filter(Boolean)
                   .join(' · ')}
               </Text>
+              <RelatedBooks book={book} />
               <FriendVerdicts title={book.title} author={book.author} />
               {unread && <SampleCard dark={false} load={() => api.sampleForBook(book.id)} />}
               <ListenRead title={book.title} author={book.author} />

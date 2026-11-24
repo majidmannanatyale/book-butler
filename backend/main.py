@@ -247,6 +247,15 @@ def book(book_id: int):
     return b
 
 
+@app.get("/api/books/{book_id}/related")
+def book_related(book_id: int):
+    """Other copies of this title, and the rest of its series (owned and missing)."""
+    b = library.get_book(book_id)
+    if not b:
+        raise HTTPException(404, "No such book.")
+    return library.related(b)
+
+
 @app.post("/api/books")
 def create_book(body: BookIn):
     if body.status not in ("owned", "wishlist"):
@@ -797,19 +806,21 @@ async def librarian_chat(request: Request, body: ChatIn):
         r = await agents.ask_librarian(body.question, body.history)
     except Exception as exc:  # noqa: BLE001
         raise _friendly(exc)
-    return {**r, "books": _books_mentioned(r.get("answer", ""))}
+    import asyncio as _a
+    return {**r, "books": await _a.to_thread(_books_mentioned, r.get("answer", ""))}
 
 
 def _books_mentioned(answer: str, limit: int = 6) -> list[dict]:
     """Plain code, $0: which of the reader's books / collection gaps the answer names,
     in the order they appear, so the app can show them as tappable covers."""
     import re as _re
+    answer = answer.replace("’", "'").replace("‘", "'")   # curly or straight apostrophes match
     text = answer.lower()
     found: list[tuple[int, dict]] = []
     seen: set[str] = set()
 
     def hit(title: str) -> int:
-        main = title.split(":")[0].strip().lower()
+        main = title.replace("’", "'").split(":")[0].strip().lower()
         if len(main) < 4:
             return -1
         m = _re.search(r"(?<![a-z])" + _re.escape(main) + r"(?![a-z])", text)
@@ -828,6 +839,21 @@ def _books_mentioned(answer: str, limit: int = 6) -> list[dict]:
                 seen.add(m["title"].lower())
                 found.append((pos, {"id": None, "title": m["title"], "author": g["author"], "cover_url": None,
                                     "status": "to_find", "why": f"Vol. {m['index']} of {g['collection']}, a series you collect"}))
+    # titles the Librarian marked (*Title*) that are not on the reader's shelves: recommendations.
+    # Each is looked up on Open Library (cached) for its author and cover, so it shows as a card too.
+    for m in _re.finditer(r"\*{1,2}([^*\n]{2,90}?)\*{1,2}", answer):
+        t = m.group(1).strip(" .,;:")
+        low = t.lower()
+        if len(t) < 2 or any(low == s_ or low.split(":")[0] == s_.split(":")[0] for s_ in seen):
+            continue
+        hits = library.ol_search(title=t, limit=1)
+        if not hits or not hits[0].get("title"):
+            continue
+        h = hits[0]
+        seen.add(low)
+        found.append((m.start(), {"id": None, "title": h["title"], "author": h.get("author") or "",
+                                  "cover_url": h.get("cover_url"), "status": "to_find",
+                                  "why": "Suggested by the Librarian"}))
     return [b for _, b in sorted(found, key=lambda x: x[0])][:limit]
 
 

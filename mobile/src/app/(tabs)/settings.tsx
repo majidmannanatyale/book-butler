@@ -128,8 +128,9 @@ export default function Settings() {
         <Button label="Replay the tour" kind="outline" onPress={async () => { await resetTips(); router.push('/tour'); }} style={{ marginTop: 6 }} />
       </Section>
 
-      <Section title="Linked accounts">
-        <Italic style={{ fontSize: 15 }}>Goodreads, Libby and Libib import — coming next (CSV export import).</Italic>
+      <Section title="Bring your library across">
+        <Italic style={{ fontSize: 15 }}>Already catalogued elsewhere? Import a Goodreads or Libib export file and every book comes across at once.</Italic>
+        <Button label="Import a library" kind="outline" onPress={() => router.push('/add?mode=import')} style={{ marginTop: 10 }} />
       </Section>
 
       <Ornament />

@@ -196,7 +196,7 @@ export default function Home() {
                   <View style={s.progressTrack}>
                     <View style={[s.progressFill, { width: `${Math.round((b.progress || 0) * 100)}%` }]} />
                   </View>
-                  <Caps style={{ fontSize: 9, marginTop: 4 }}>{`${Math.round((b.progress || 0) * 100)}% · ${b.hours_read} h`}</Caps>
+                  <Caps style={{ fontSize: 9, marginTop: 4 }}>{`${Math.round((b.progress || 0) * 100)}% · ${Math.round(b.hours_est ?? b.hours_read ?? 0)} h`}</Caps>
                 </View>
               </Pressable>
             ))}

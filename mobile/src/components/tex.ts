@@ -89,6 +89,16 @@ export function preload(base: string, books: Book[], side: Side) {
   books.forEach((b) => load(texUrl(base, b, side)));
 }
 
+/** True when every one of these textures is already in memory (nothing to wait for). */
+export function allReady(base: string, books: Book[], side: Side) {
+  return books.every((b) => ready.has(texUrl(base, b, side)));
+}
+
+/** Resolves once these textures have loaded (or failed: a missing one never blocks). */
+export function loadAll(base: string, books: Book[], side: Side) {
+  return Promise.all(books.map((b) => load(texUrl(base, b, side)))).then(() => undefined);
+}
+
 let _shadow: THREE.Texture | null = null;
 /** A soft radial contact shadow, generated once on the device (no download). */
 export function shadowTexture() {

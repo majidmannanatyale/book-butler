@@ -3,9 +3,10 @@
 // spine artwork (drawn by the server) on the front and its cover on the side.
 // Tap a book: it slides off the shelf toward you and turns to show its cover.
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
-import { pagesUrl, shadowTexture, texUrl, useTexture } from '@/components/tex';
+import { useIsFocused } from 'expo-router';
+import { allReady, loadAll, pagesUrl, shadowTexture, texUrl, useTexture } from '@/components/tex';
 import * as THREE from 'three';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
@@ -141,11 +142,13 @@ function BookMesh({
     if (!g) return;
     if (born.current == null) born.current = state.clock.elapsedTime;
     const age = state.clock.elapsedTime - born.current - p.i * 0.035;
-    const drop = age < 0 ? 1 : Math.max(0, 1 - age / 0.6); // books drop onto the shelf one by one
+    // books slide back onto their own shelf one by one, straight from the front, so they never pass
+    // through a shelf board or the books already standing (a drop from above went through both)
+    const slide = age < 0 ? 1 : Math.max(0, 1 - age / 0.6);
     const k = 1 - Math.pow(0.001, dt); // smooth follow
     const tx = selected ? 0 : p.x;
-    const ty = selected ? centerY : p.y + drop * drop * 1.2;
-    const tz = selected ? 1.6 : (anySelected ? -0.05 : 0) + p.z;
+    const ty = selected ? centerY : p.y;
+    const tz = selected ? 1.6 : (anySelected ? -0.05 : 0) + p.z + slide * slide * 2.5;
     const ry = selected ? -Math.PI / 2 + Math.sin(state.clock.elapsedTime * 0.8) * 0.18 : 0;
     const s = selected ? 1.15 : 1;
     g.position.x += (tx - g.position.x) * k;
@@ -189,7 +192,7 @@ function BookMesh({
   }, [cover, mats, cloth]);
 
   return (
-    <group ref={ref} position={[p.x, p.y + 1.2, 0]} rotation={[0, 0, p.lean]}>
+    <group ref={ref} position={[p.x, p.y, p.z + 2.5]} rotation={[0, 0, p.lean]}>
       <mesh
         material={mats}
         onClick={(e) => {
@@ -373,6 +376,24 @@ export default function Shelf3D({ books, base, onOpen, readOnly = false, decor =
     setPage(next);
   };
   const touch = useRef<{ x: number; y: number } | null>(null);
+  const focused = useIsFocused();
+  // a new set of books (another tab, another case) gets a fresh shelf: the old one is cleared at once and a
+  // loading sign shows until the new spines have arrived, instead of the old shelf lingering underneath
+  const setKey = useMemo(() => `${shown.length}:${shown.map((b) => b.id).join(',')}`, [shown]);
+  // the set whose spines are all in memory; until the new set catches up, the loading sign shows
+  const [readyKey, setReadyKey] = useState(() => (allReady(base, shown, 'spine') ? setKey : ''));
+  useEffect(() => {
+    if (allReady(base, shown, 'spine')) {
+      setReadyKey(setKey);
+      return;
+    }
+    let alive = true;
+    loadAll(base, shown, 'spine').then(() => alive && setReadyKey(setKey));
+    return () => {
+      alive = false;
+    };
+  }, [base, shown, setKey]);
+  const loading = readyKey !== setKey && !allReady(base, shown, 'spine');
   return (
     <View
       style={{ flex: 1 }}
@@ -404,8 +425,12 @@ export default function Shelf3D({ books, base, onOpen, readOnly = false, decor =
           </Pressable>
         </View>
       )}
+      <View style={{ flex: 1 }}>
       <Canvas
         camera={{ fov: 38, position: [0, -1.5, 9] }}
+        // paused while another tab or screen is showing: the 3D scene stays loaded (instant to come back to)
+        // but stops drawing 150 books every frame in the background
+        frameloop={focused ? 'always' : 'never'}
         onPointerMissed={() => {
           setSel(null);
           setBust(null);
@@ -422,9 +447,9 @@ export default function Shelf3D({ books, base, onOpen, readOnly = false, decor =
         <directionalLight position={[2, 4, 6]} intensity={1.1} color="#FFE6B0" />
         <pointLight position={[0, 1.2, 2.5]} intensity={6} distance={9} color="#F2B53A" />
         <pointLight position={[0, -3.5, 2.5]} intensity={4} distance={8} color="#F7C863" />
-        <Suspense fallback={null}>
+        <Suspense key={setKey} fallback={null}>
           <Bookcase rows={rows} SW={SW} />
-          {placed.map((p) => (
+          {!loading && placed.map((p) => (
             <BookMesh
               key={p.book.id}
               p={p}
@@ -454,6 +479,13 @@ export default function Shelf3D({ books, base, onOpen, readOnly = false, decor =
         )}
         <Rig rows={rows} SW={SW} selected={sel != null} extraTop={decor.length ? 0.9 : 0} />
       </Canvas>
+      {loading && (
+        <View style={s.loading} pointerEvents="none">
+          <ActivityIndicator color={colors.gold} />
+          <Italic style={{ fontSize: 15, marginTop: 10 }}>Fetching the volumes…</Italic>
+        </View>
+      )}
+      </View>
       {bust && !chosen ? (
         <Animated.View key={`b${bust.id}`} entering={FadeInDown.duration(400)} style={s.placard}>
           <Caps style={{ color: colors.creamSoft, fontSize: 9 }}>{`from ${bust.book_title}`}</Caps>
@@ -498,6 +530,7 @@ export default function Shelf3D({ books, base, onOpen, readOnly = false, decor =
 }
 
 const s = StyleSheet.create({
+  loading: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(8,19,37,0.72)' },
   placard: { position: 'absolute', left: 20, right: 20, bottom: 18, backgroundColor: colors.cream, padding: 16 },
   title: { fontFamily: fonts.display, fontSize: 24, color: colors.creamInk, lineHeight: 27, marginTop: 2 },
   meta: { fontFamily: fonts.bodyItalic, fontSize: 13.5, color: colors.creamSoft, marginTop: 2 },

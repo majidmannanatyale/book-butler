@@ -173,8 +173,8 @@ export default function ARCharacters() {
 
       <View style={{ flex: 1 }} {...pan.panHandlers}>
         {ch && (
+          // one 3D view for the whole screen: switching characters swaps the bust, not the GL context
           <Canvas
-            key={ch.name}
             dpr={[1, 2]}
             gl={{ antialias: true, alpha: true }}
             onCreated={({ gl }) => {
@@ -187,7 +187,7 @@ export default function ARCharacters() {
             <directionalLight position={[2.5, 3, 3]} intensity={2.2} color="#FFF1D6" />
             <directionalLight position={[-3, 1.5, -2]} intensity={1.1} color="#A9CDBE" />
             <pointLight position={[0, 2.4, 1.2]} intensity={3} distance={6} color="#F2B53A" />
-            <Stage look={ch.look} pose={pose} seed={i + 1} />
+            <Stage key={ch.name} look={ch.look} pose={pose} seed={i + 1} />
             <Motes />
           </Canvas>
         )}

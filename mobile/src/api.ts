@@ -85,6 +85,11 @@ async function req<T>(path: string, init?: RequestInit, timeoutMs = 90000): Prom
 }
 
 // ---------- types
+export type Related = {
+  copies: Pick<Book, 'id' | 'title' | 'author' | 'publisher' | 'year' | 'binding' | 'edition' | 'cover_url' | 'status'>[];
+  series: { name: string; author?: string | null; members: { index: number | null; title: string; id: number | null; owned: boolean; current: boolean }[] } | null;
+};
+
 export type Book = {
   id: number;
   title: string;
@@ -110,6 +115,7 @@ export type Book = {
   finished_on?: string | null;
   progress: number;
   hours_read: number;
+  hours_est?: number;
   notes?: string | null;
   position: number;
   faces?: string[];
@@ -272,6 +278,7 @@ export const api = {
   saveQuote: (title: string, author: string, to: 'wishlist' | 'tbr') =>
     req<{ book: Book; already: string | null }>('/api/quote/save', { method: 'POST', body: JSON.stringify({ title, author, to }) }, 30000),
   collections: () => req<{ collections: any[]; gaps: any[] }>('/api/collections'),
+  related: (id: number) => req<Related>(`/api/books/${id}/related`),
   search: (q: string) => req<{ results: SearchHit[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   isbn: (isbn: string) => req<SearchHit>(`/api/isbn/${encodeURIComponent(isbn)}`),
   scan: (image_b64: string) =>

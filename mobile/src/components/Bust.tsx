@@ -328,8 +328,8 @@ function skullPoints(h: Head, n: number, seed: number, grow = 1.0): [number, num
 // (head width, face length, depth) from their seed, and a feminine figure gets a narrower
 // jaw, slimmer neck and narrower shoulders. Done once per character on ~9k vertices.
 const _morphs = new Map<string, Scan>();
-function sitter(scan: Scan, seed: number, figure: string): Scan {
-  const key = `${seed}|${figure}`;
+function sitter(scan: Scan, seed: number, figure: string, look: Required<Look>): Scan {
+  const key = `${seed}|${figure}|${look.hair}|${look.beard}|${look.age}`;
   const hit = _morphs.get(key);
   if (hit && (hit as any).base === scan.geom) return hit;
   const h = scan.head;
@@ -371,6 +371,8 @@ function sitter(scan: Scan, seed: number, figure: string): Scan {
   g.setAttribute('position', new THREE.BufferAttribute(P, 3));
   g.setAttribute('uv', scan.geom.attributes.uv);
   g.setIndex(scan.geom.index);
+  // hair, beard and age are carved into the head itself (as a sculptor would), not stuck on
+  carveHairAndBeard(P, scan.geom.attributes.normal.array as Float32Array, scan.head, scan.faceZ, look, seed);
   g.computeVertexNormals();
   g.computeBoundingSphere();
   const head: Head = {
@@ -439,6 +441,128 @@ function carveFace(P: Float32Array, h: Head, faceZ: number, r: () => number, fem
   }
 }
 
+const smooth = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+/** Hair, beard and age, carved in the marble: the head's own surface is raised where hair grows
+ *  and cut with the grooves of combed locks, tight curls or a close crop; long hair fills in behind
+ *  the neck down to the shoulders; a beard grows out of the jaw as one carved mass with its
+ *  strands; age lines the brow. Everything pushes straight out from the middle of the head (the
+ *  scan's own normals are too uneven around the mouth and ears to carve along). */
+function carveHairAndBeard(P: Float32Array, _N: Float32Array, h: Head, faceZ: number, L: Required<Look>, seed: number) {
+  const fem = L.figure === 'feminine';
+  const thick: Record<string, number> = { cropped: 0.024, waves: 0.035, long: 0.035, bun: 0.03, curls: 0.045, bald: 0, veil: 0.015 };
+  const T = thick[L.hair] ?? 0.03;
+  const longHair = L.hair === 'long' || (fem && (L.hair === 'curls' || L.hair === 'waves' || L.hair === 'bun'));
+  const c = h.chin;
+  const ph = (seed % 7) * 0.9; // each sitter's locks fall a little differently
+  const beard = fem ? 0 : L.beard === 'full' ? 0.045 : L.beard === 'short' ? 0.02 : 0;
+  const old = L.age === 'old';
+  const ox = h.cx, oy = h.cy - 0.02, oz = h.cz - 0.04; // the middle of the head
+  for (let i = 0; i < P.length; i += 3) {
+    const x = P[i], y = P[i + 1], z = P[i + 2];
+    if (y < h.neck - 0.3) continue;
+    const dx = x - ox, dy = y - oy, dz = z - oz;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    const hl = Math.sqrt(dx * dx + dz * dz) || 1; // horizontal distance from the head's axis
+    const fr = Math.max(-1, Math.min(1, (z - h.cz) / h.rz)); // -1 back of the head … 1 the face
+    const a = Math.atan2(dx, dz);
+    const e = Math.atan2(dy, hl);
+    let out = 0; // pushed straight out from the middle of the head
+    let side = 0; // pushed sideways out from the axis (hair over the neck, the beard)
+    let down = 0;
+    // ---- hair on the head, above a hairline high on the brow, at the ears at the sides and
+    // at the nape behind
+    if (T > 0 && y > h.neck) {
+      const edge = h.cy + 0.04 + (fr > 0 ? fr * 0.5 : fr * 0.55) * h.ry;
+      const w = smooth(edge - 0.01, edge + 0.05, y);
+      if (w > 0) {
+        let pat: number;
+        if (L.hair === 'curls') {
+          // tight coils, drilled between (the classical way)
+          const k = 34;
+          pat = Math.sin(x * k + ph) * Math.sin(y * k * 1.1) * Math.sin(z * k + ph * 0.5);
+          pat = Math.sign(pat) * Math.pow(Math.abs(pat), 0.5) * 0.6;
+        } else if (L.hair === 'cropped') {
+          // short carved locks, brushed forward a little (the way Roman portraits cut them)
+          pat = Math.sin(a * 20 + Math.sin(e * 9 + ph) * 1.5) * Math.sin(e * 16 + a * 4) * 0.7;
+        } else {
+          // combed locks running back from the brow, with a gentle wave along them
+          pat = Math.sin(a * 12 + Math.sin(e * 5 + ph) * 1.4) * 0.85;
+        }
+        const crown = 0.7 + 0.3 * Math.max(0, dy / h.ry); // fuller on top
+        out += w * T * crown * (1 + pat);
+      }
+    }
+    // ---- long hair falls behind the ears and fills in behind the neck, to the shoulders
+    if (longHair && fr < 0.25 && y < h.cy) {
+      const reach = h.neck - 0.22; // where the locks end
+      const f = smooth(h.cy, reach, y); // 0 at the ears … 1 at the ends
+      const fade = smooth(reach - 0.04, reach + 0.05, y) * smooth(0.25, -0.1, fr);
+      if (fade > 0) {
+        // the mass keeps nearly the head's width as it falls, so it covers the neck behind
+        const ell = 1 / Math.sqrt((Math.sin(a) / (h.rx * 0.98)) ** 2 + (Math.cos(a) / (h.rz * 0.9)) ** 2);
+        const lock = L.hair === 'curls' ? Math.sin(a * 14 + Math.sin(y * 18 + ph) * 1.6) : Math.sin(a * 16 + Math.sin(f * 4 + ph) * 0.8);
+        const target = ell * (1 + f * 0.06) + T + lock * 0.018;
+        side += Math.max(0, target - hl) * fade;
+      }
+    }
+    // ---- beard: from the ears down the jaw to the chin, leaving the lips clear
+    if (beard > 0 && z > h.cz - 0.05 && y > h.neck - 0.05) {
+      const sd = Math.min(1, Math.abs(x - h.cx) / (h.rx * 0.62));
+      const top = c + 0.16 + sd * sd * 0.24; // just under the lip in front, up to the ears at the sides
+      let w = smooth(top + 0.03, top - 0.03, y) * smooth(h.cz - 0.05, h.cz + 0.08, z);
+      // moustache over the upper lip
+      const mo = Math.exp(-(((x - h.cx) / 0.1) ** 2)) * smooth(c + 0.2, c + 0.225, y) * smooth(c + 0.275, c + 0.25, y) * smooth(faceZ - 0.14, faceZ - 0.07, z);
+      // the lips themselves stay bare
+      const lips = Math.exp(-(((x - h.cx) / 0.09) ** 2)) * smooth(c + 0.13, c + 0.165, y) * smooth(c + 0.235, c + 0.21, y);
+      w = Math.max(w * (1 - lips), mo * 0.35);
+      if (w > 0) {
+        const strands = Math.sin((x - h.cx) * 30 + Math.sin(y * 10 + ph) * 1.2) * 0.7;
+        side += w * beard * (1 + strands);
+        if (L.beard === 'full') {
+          // a full beard is deepest at the chin and hangs below it
+          const chinW = Math.exp(-(((x - h.cx) / 0.17) ** 2)) * smooth(c + 0.18, c - 0.02, y);
+          side += w * 0.04 * chinW;
+          down += w * 0.17 * chinW;
+        }
+      }
+    }
+    // ---- age: lines across the brow
+    if (old && fr > 0.6) {
+      const brow = smooth(c + 0.6, c + 0.63, y) * smooth(c + 0.78, c + 0.73, y) * Math.exp(-(((x - h.cx) / 0.18) ** 2));
+      out -= brow * 0.004 * (Math.sin(y * 120) > 0.5 ? 1 : 0);
+    }
+    if (out !== 0 || side !== 0 || down !== 0) {
+      P[i] = x + (dx / len) * out + (dx / hl) * side;
+      P[i + 1] = y + (dy / len) * out - down;
+      P[i + 2] = z + (dz / len) * out + (dz / hl) * side;
+    }
+  }
+}
+
+/** Long hair falling behind the shoulders: one carved mass with deep vertical locks and an
+ *  uneven, tapering end. */
+function hairCurtain(h: Head, seed: number, curly: boolean, depth: number) {
+  const top = h.cy + h.ry * 0.25, bot = h.neck - (curly ? 0.14 : 0.2);
+  const g = new THREE.CylinderGeometry(1, 1, top - bot, 140, 14, true, Math.PI * 0.42, Math.PI * 1.16);
+  const p = g.attributes.position as THREE.BufferAttribute;
+  const ph = (seed % 5) * 1.3;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const f = 0.5 - y / (top - bot); // 0 at the top … 1 at the ends
+    const a = Math.atan2(x, z);
+    const lock = curly ? Math.sin(a * 26 + Math.sin(f * 14 + ph) * 1.8) : Math.sin(a * 34 + Math.sin(f * 5 + ph) * 0.9);
+    const r = 1 + f * 0.1 + lock * (curly ? 0.045 : 0.03) * (0.4 + f);
+    const ends = f > 0.85 ? (Math.sin(a * 17 + ph) * 0.5 + 0.5) * 0.06 : 0; // the locks end unevenly
+    p.setXYZ(i, x * r * (h.rx + depth), y + ends, z * r * (h.rz * 0.93 + depth));
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 /** Long hair that falls past the ears to the shoulders: vertical carved locks around the
  *  sides and back of the head, leaving the face clear. Curly hair falls as curls. */
 function hairFall(h: Head, seed: number, curly: boolean): [number, number, number][] {
@@ -482,31 +606,6 @@ function Accessories({ scan, h, L, seed }: { scan: Scan; h: Head; L: Required<Lo
   const m = marbleMats().marble;
   const sx = h.rx * 0.93, sy = h.ry * 1.0, sz = h.rz * 0.9;
   const headO: [number, number, number] = [h.cx, h.cy - 0.05, h.cz - 0.05];
-  const curls = useMemo(() => (L.hair === 'curls' ? onSurface(scan, skullPoints(h, 90, seed, 1.0), headO, 0.035) : []), [L.hair, seed, scan]);
-  const locks = useMemo(
-    () => (['waves', 'long', 'bun', 'cropped'].includes(L.hair) ? onSurface(scan, skullPoints(h, L.hair === 'cropped' ? 120 : 100, seed + 1, 1.0), headO, L.hair === 'cropped' ? 0.014 : 0.024) : []),
-    [L.hair, seed, scan],
-  );
-  const beardCurls = useMemo(() => {
-    if (L.beard === 'none') return [];
-    // curls along the jaw, from ear to ear through the chin
-    const pts: [number, number, number][] = [];
-    const r = rand(seed + 5);
-    const rows = L.beard === 'full' ? 4 : 3;
-    const per = L.beard === 'full' ? 19 : 17;
-    for (let row = 0; row < rows; row++)
-      for (let i = 0; i < per; i++) {
-        const a = -1.3 + (i / (per - 1)) * 2.6;
-        const inset = 1 - row * 0.07;
-        pts.push([
-          h.cx + Math.sin(a) * h.rx * 0.74 * inset,
-          h.chin + 0.075 + row * 0.042 + (1 - Math.cos(a)) * 0.2 + (r() - 0.5) * 0.015,
-          h.cz + 0.02 + Math.cos(a) * h.rz * 0.72 * inset,
-        ]);
-      }
-    // snap onto the jaw: rays from inside the mouth/jaw outward
-    return onSurface(scan, pts, [h.cx, h.chin + 0.22, h.cz - 0.08], L.beard === 'full' ? 0.022 : 0.012);
-  }, [L.beard, seed, scan]);
   const laurel = useMemo(() => {
     if (L.headwear !== 'laurel') return [];
     const pts: [number, number, number][] = [];
@@ -529,10 +628,7 @@ function Accessories({ scan, h, L, seed }: { scan: Scan; h: Head; L: Required<Lo
   );
   // long hair falls to the shoulders; a woman's curls or waves fall too
   const fem = L.figure === 'feminine';
-  const fall = useMemo(
-    () => (L.hair === 'long' || (fem && (L.hair === 'curls' || L.hair === 'waves')) ? hairFall(h, seed, L.hair === 'curls') : []),
-    [L.hair, fem, seed, h],
-  );
+
   const capY = h.cy + 0.02;
   return (
     <group>
@@ -542,27 +638,8 @@ function Accessories({ scan, h, L, seed }: { scan: Scan; h: Head; L: Required<Lo
           <sphereGeometry args={[1, 40, 20, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
         </mesh>
       )}
-      {L.hair === 'curls' && <Instanced positions={curls} scale={0.07} geom={SPHERE} material={m} />}
-      {(L.hair === 'waves' || L.hair === 'long' || L.hair === 'bun' || L.hair === 'cropped') && (
-        <Instanced
-          positions={locks}
-          scale={L.hair === 'cropped' ? [0.045, 0.034, 0.065] : [0.055, 0.042, 0.11]}
-          geom={SPHERE}
-          material={m}
-          normalFrom={[h.cx, h.cy + 0.02, h.cz - 0.03, sx, sy, sz]}
-        />
-      )}
-      {fall.length > 0 && (
-        <>
-          {/* the carved mass of the hair behind the locks, so no light shows through */}
-          <mesh material={m} position={[h.cx, (h.cy + h.ry * 0.2 + h.neck - 0.2) / 2, h.cz - 0.03]} scale={[h.rx * 0.98, 1, h.rz * 0.93]}>
-            <cylinderGeometry args={[1, 1.08, h.cy + h.ry * 0.2 - (h.neck - 0.2), 40, 1, true, Math.PI * 0.42, Math.PI * 1.16]} />
-          </mesh>
-          <Instanced positions={fall} scale={L.hair === 'curls' ? 0.064 : [0.06, 0.17, 0.056]} geom={SPHERE} material={m} />
-        </>
-      )}
       {L.hair === 'bun' && (
-        <mesh material={m} position={[h.cx, h.cy + 0.06, h.cz - sz * 1.05]} scale={0.13}>
+        <mesh material={m} position={[h.cx, h.cy + 0.1, h.cz - sz * 1.08]} scale={[0.15, 0.13, 0.12]}>
           <sphereGeometry args={[1, 18, 14]} />
         </mesh>
       )}
@@ -572,8 +649,6 @@ function Accessories({ scan, h, L, seed }: { scan: Scan; h: Head; L: Required<Lo
         </mesh>
       )}
 
-      {/* beard */}
-      {L.beard !== 'none' && <Instanced positions={beardCurls} scale={L.beard === 'full' ? 0.036 : 0.026} geom={SPHERE} material={m} />}
 
       {/* headwear */}
       {L.headwear === 'laurel' && <Instanced positions={laurel} scale={[0.03, 0.014, 0.075]} geom={LEAF} material={m} />}
@@ -620,7 +695,50 @@ function Accessories({ scan, h, L, seed }: { scan: Scan; h: Head; L: Required<Lo
 /** Cloth over the shoulders: the scan itself, a touch larger, clipped below the neckline,
  *  so the drapery follows the body like carved fabric. */
 const _garmentMats: Record<string, THREE.MeshStandardMaterial> = {};
-function Garment({ scan, drape }: { scan: Scan; drape: string }) {
+const _garments = new Map<string, THREE.BufferGeometry>();
+/** The body's own surface, raised into cloth and cut with the folds of each kind of dress:
+ *  heavy vertical folds for a cloak, softer ones for a robe, diagonal swags across the chest
+ *  for a toga, fine pleats for a chiton, and a smooth breastplate with a centre ridge for armour. */
+function garmentGeom(scan: Scan, drape: string, seed: number) {
+  const key = `${drape}|${seed}`;
+  const hit = _garments.get(key);
+  if (hit && (hit as any).base === scan.geom) return hit;
+  const h = scan.head;
+  const P = new Float32Array(scan.geom.attributes.position.array as Float32Array);
+  const N = scan.geom.attributes.normal.array as Float32Array;
+  const ph = (seed % 9) * 0.7;
+  for (let i = 0; i < P.length; i += 3) {
+    const x = P[i], y = P[i + 1], z = P[i + 2];
+    if (y > h.neck + 0.05) continue;
+    const dx = x - h.cx, dz = z - h.cz;
+    const hl = Math.sqrt(dx * dx + dz * dz) || 1;
+    const a = Math.atan2(dx, dz);
+    const keep = smooth(0.02, 0.14, y); // the cut edge at the bottom stays flat
+    const hang = smooth(h.neck, h.neck - 0.45, y); // folds deepen as the cloth falls
+    let d = 0.022;
+    if (drape === 'cloak') d = 0.04 + Math.sin(a * 9 + ph + Math.sin(y * 4) * 0.6) * 0.032 * (0.3 + hang);
+    else if (drape === 'robe') d = 0.028 + Math.sin(a * 13 + ph) * 0.02 * (0.3 + hang);
+    else if (drape === 'toga') d = 0.03 + Math.sin((dx * 0.9 + (y - h.neck) * 1.3) * 26 + ph) * 0.02 * (0.4 + hang) * (dx > -0.5 ? 1 : 0.4);
+    else if (drape === 'chiton') d = 0.02 + Math.sin(a * 30 + ph) * 0.009 * (0.3 + hang);
+    else if (drape === 'armor') d = 0.026 + 0.03 * Math.exp(-((dx / 0.05) ** 2)) * (dz > 0 ? 1 : 0) + (Math.sin(y * 34) > 0.92 ? 0.006 : 0);
+    // outward from the body's axis, and a little upward over the shoulders (where it faces up)
+    const up = Math.max(0, N[i + 1]);
+    d *= keep;
+    P[i] = x + (dx / hl) * d * (1 - up * 0.5);
+    P[i + 1] = y + up * d;
+    P[i + 2] = z + (dz / hl) * d * (1 - up * 0.5);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(P, 3));
+  g.setAttribute('uv', scan.geom.attributes.uv);
+  g.setIndex(scan.geom.index);
+  g.computeVertexNormals();
+  (g as any).base = scan.geom;
+  _garments.set(key, g);
+  return g;
+}
+
+function Garment({ scan, drape, seed }: { scan: Scan; drape: string; seed: number }) {
   const neckline = scan.head.neck - (drape === 'armor' ? 0.02 : drape === 'chiton' ? 0.1 : 0.04);
   const key = `${drape}|${neckline.toFixed(3)}`;
   if (!_garmentMats[key]) {
@@ -631,12 +749,8 @@ function Garment({ scan, drape }: { scan: Scan; drape: string }) {
       clippingPlanes: [new THREE.Plane(new THREE.Vector3(0, -1, 0), neckline)],
     }));
   }
-  const grow = drape === 'cloak' ? 1.06 : drape === 'armor' ? 1.03 : 1.04;
-  return (
-    <group>
-      <mesh geometry={scan.geom} material={_garmentMats[key]} scale={[grow, 1.0, grow]} position={[0, -0.004, 0]} />
-    </group>
-  );
+  const geom = useMemo(() => garmentGeom(scan, drape, seed), [scan, drape, seed]);
+  return <mesh geometry={geom} material={_garmentMats[key]} />;
 }
 
 /** The scan isn't loaded (yet): a simple procedural stand-in so there's never a hole. */
@@ -665,7 +779,7 @@ export default function Bust({ look = {}, seed = 1 }: { look?: Look; seed?: numb
     if (L.hair === 'cropped' || L.hair === 'bald') L.hair = 'long';
   }
   // each character is carved from the scan with their own proportions
-  const scan = useMemo(() => (base ? sitter(base, seed, L.figure) : null), [base, seed, L.figure]);
+  const scan = useMemo(() => (base ? sitter(base, seed, L.figure, L) : null), [base, seed, L.figure, L.hair, L.beard, L.age]);
   const W = L.build === 'broad' ? 1.06 : L.build === 'slight' ? 0.94 : 1;
   return (
     <group>
@@ -674,7 +788,7 @@ export default function Bust({ look = {}, seed = 1 }: { look?: Look; seed?: numb
         {scan ? (
           <>
             <mesh geometry={scan.geom} material={marbleMats().marble} />
-            <Garment scan={scan} drape={L.drape} />
+            <Garment scan={scan} drape={L.drape} seed={seed} />
             <Accessories scan={scan} h={scan.head} L={L} seed={seed} />
           </>
         ) : (

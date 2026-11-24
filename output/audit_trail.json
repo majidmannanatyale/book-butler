@@ -4130,5 +4130,545 @@
         }
       }
     }
+  },
+  {
+    "timestamp": "2026-11-23T22:18:36+00:00",
+    "kind": "sculptor",
+    "title": "Onyx Storm (Deluxe Limited Edition)",
+    "characters": [
+      "Violet Sorrengail",
+      "Xaden Riorson",
+      "Dain Aetos",
+      "Tairneanach"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 599,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 296,
+      "requests": 1,
+      "cost_usd": 0.000208,
+      "by_agent": {
+        "sculptor": {
+          "input_tokens": 599,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 296,
+          "requests": 1
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-23T22:57:47+00:00",
+    "kind": "sculptor",
+    "title": "Red Rising",
+    "characters": [
+      "Darrow",
+      "Mustang (Virginia au Augustus)",
+      "Sevro au Barca",
+      "Dancer"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 590,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 310,
+      "requests": 1,
+      "cost_usd": 0.000214,
+      "by_agent": {
+        "sculptor": {
+          "input_tokens": 590,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 310,
+          "requests": 1
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-24T00:37:07+00:00",
+    "kind": "sculptor",
+    "title": "Harry Potter and the Philosopher's Stone",
+    "characters": [
+      "Harry Potter",
+      "Hermione Granger",
+      "Ron Weasley",
+      "Albus Dumbledore"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 600,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 294,
+      "requests": 1,
+      "cost_usd": 0.000207,
+      "by_agent": {
+        "sculptor": {
+          "input_tokens": 600,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 294,
+          "requests": 1
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-24T00:39:45+00:00",
+    "kind": "chat",
+    "question": "What should I read after Piranesi?",
+    "tools": [
+      "search_my_library",
+      "taste_profile",
+      "search_my_library",
+      "collection_gaps",
+      "search_my_library",
+      "search_my_library",
+      "search_my_library"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 2732,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 293,
+      "requests": 3,
+      "cost_usd": 0.00042,
+      "by_agent": {
+        "librarian_chat": {
+          "input_tokens": 2732,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 293,
+          "requests": 3
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-24T00:40:22+00:00",
+    "kind": "chat",
+    "question": "Do I own Harry potter",
+    "tools": [
+      "search_my_library"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 1653,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 66,
+      "requests": 2,
+      "cost_usd": 0.000198,
+      "by_agent": {
+        "librarian_chat": {
+          "input_tokens": 1653,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 66,
+          "requests": 2
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-24T00:43:08+00:00",
+    "kind": "chat",
+    "question": "Do I own Harry Potter? And what should I read after Piranesi?",
+    "tools": [
+      "search_my_library",
+      "search_my_library",
+      "taste_profile",
+      "search_my_library"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 3214,
+      "cached_tokens": 1248,
+      "cache_write_tokens": 1248,
+      "output_tokens": 232,
+      "requests": 3,
+      "cost_usd": 0.000356,
+      "by_agent": {
+        "librarian_chat": {
+          "input_tokens": 3214,
+          "cached_tokens": 1248,
+          "cache_write_tokens": 1248,
+          "output_tokens": 232,
+          "requests": 3
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-24T00:50:08+00:00",
+    "kind": "chat",
+    "question": "Do I own Harry Potter? And what should I read after Piranesi?",
+    "tools": [
+      "search_my_library",
+      "search_my_library",
+      "taste_profile",
+      "search_my_library",
+      "search_my_library"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 4542,
+      "cached_tokens": 2480,
+      "cache_write_tokens": 1240,
+      "output_tokens": 296,
+      "requests": 4,
+      "cost_usd": 0.00041,
+      "by_agent": {
+        "librarian_chat": {
+          "input_tokens": 4542,
+          "cached_tokens": 2480,
+          "cache_write_tokens": 1240,
+          "output_tokens": 296,
+          "requests": 4
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-24T01:15:39+00:00",
+    "kind": "sculptor",
+    "title": "Harry Potter and the Chamber of Secrets (Minalima Edition), Volume 2",
+    "characters": [
+      "Harry Potter",
+      "Ron Weasley",
+      "Hermione Granger",
+      "Ginny Weasley"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 609,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 292,
+      "requests": 1,
+      "cost_usd": 0.000207,
+      "by_agent": {
+        "sculptor": {
+          "input_tokens": 609,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 292,
+          "requests": 1
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-24T01:16:04+00:00",
+    "kind": "sculptor",
+    "title": "Harry Potter and the Half-Blood Prince (Book 6)",
+    "characters": [
+      "Harry Potter",
+      "Hermione Granger",
+      "Ron Weasley",
+      "Albus Dumbledore"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 604,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 284,
+      "requests": 1,
+      "cost_usd": 0.000202,
+      "by_agent": {
+        "sculptor": {
+          "input_tokens": 604,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 284,
+          "requests": 1
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-24T02:09:01+00:00",
+    "kind": "scout_team",
+    "client": "192.168.1.5",
+    "spines": 1,
+    "new": 1,
+    "scouts": 1,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 724,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 64,
+      "requests": 1,
+      "cost_usd": 0.000104,
+      "by_agent": {
+        "scout_0": {
+          "input_tokens": 724,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 64,
+          "requests": 1
+        }
+      }
+    },
+    "timings": {
+      "total": 3.37,
+      "scouts": 1
+    }
+  },
+  {
+    "timestamp": "2026-11-24T02:09:05+00:00",
+    "kind": "scout_team",
+    "client": "192.168.1.5",
+    "spines": 2,
+    "new": 2,
+    "scouts": 1,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 737,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 66,
+      "requests": 1,
+      "cost_usd": 0.000107,
+      "by_agent": {
+        "scout_0": {
+          "input_tokens": 737,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 66,
+          "requests": 1
+        }
+      }
+    },
+    "timings": {
+      "total": 3.11,
+      "scouts": 1
+    }
+  },
+  {
+    "timestamp": "2026-11-24T02:09:05+00:00",
+    "kind": "scout_team",
+    "client": "192.168.1.5",
+    "spines": 10,
+    "new": 9,
+    "scouts": 5,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 3782,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 177,
+      "requests": 5,
+      "cost_usd": 0.000467,
+      "by_agent": {
+        "scout_4": {
+          "input_tokens": 743,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 25,
+          "requests": 1
+        },
+        "scout_2": {
+          "input_tokens": 769,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 32,
+          "requests": 1
+        },
+        "scout_0": {
+          "input_tokens": 739,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 56,
+          "requests": 1
+        },
+        "scout_3": {
+          "input_tokens": 738,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 32,
+          "requests": 1
+        },
+        "scout_1": {
+          "input_tokens": 793,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 32,
+          "requests": 1
+        }
+      }
+    },
+    "timings": {
+      "total": 4.4,
+      "scouts": 5
+    }
+  },
+  {
+    "timestamp": "2026-11-24T02:09:09+00:00",
+    "kind": "scout_team",
+    "client": "192.168.1.5",
+    "spines": 13,
+    "new": 8,
+    "scouts": 4,
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 2981,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 263,
+      "requests": 4,
+      "cost_usd": 0.00043,
+      "by_agent": {
+        "scout_1": {
+          "input_tokens": 738,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 32,
+          "requests": 1
+        },
+        "scout_3": {
+          "input_tokens": 739,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 32,
+          "requests": 1
+        },
+        "scout_2": {
+          "input_tokens": 753,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 64,
+          "requests": 1
+        },
+        "scout_0": {
+          "input_tokens": 751,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 135,
+          "requests": 1
+        }
+      }
+    },
+    "timings": {
+      "total": 3.84,
+      "scouts": 4
+    }
+  },
+  {
+    "timestamp": "2026-11-24T02:25:14+00:00",
+    "kind": "chat",
+    "question": "Who's my most collected author",
+    "tools": [
+      "taste_profile"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 1399,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 31,
+      "requests": 2,
+      "cost_usd": 0.000155,
+      "by_agent": {
+        "librarian_chat": {
+          "input_tokens": 1399,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 31,
+          "requests": 2
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-24T02:25:35+00:00",
+    "kind": "chat",
+    "question": "Do I have all the Jurassic park books",
+    "tools": [
+      "search_my_library",
+      "collection_gaps",
+      "open_library_search"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 3507,
+      "cached_tokens": 0,
+      "cache_write_tokens": 1182,
+      "output_tokens": 111,
+      "requests": 4,
+      "cost_usd": 0.000436,
+      "by_agent": {
+        "librarian_chat": {
+          "input_tokens": 3507,
+          "cached_tokens": 0,
+          "cache_write_tokens": 1182,
+          "output_tokens": 111,
+          "requests": 4
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-24T02:26:27+00:00",
+    "kind": "chat",
+    "question": "Do I have the Martian",
+    "tools": [
+      "search_my_library"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 1316,
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "output_tokens": 45,
+      "requests": 2,
+      "cost_usd": 0.000154,
+      "by_agent": {
+        "librarian_chat": {
+          "input_tokens": 1316,
+          "cached_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 45,
+          "requests": 2
+        }
+      }
+    }
+  },
+  {
+    "timestamp": "2026-11-24T02:26:44+00:00",
+    "kind": "chat",
+    "question": "Which books are similar",
+    "tools": [
+      "taste_profile",
+      "search_my_library",
+      "search_my_library",
+      "check_owned"
+    ],
+    "usage": {
+      "model": "gpt-6-luna",
+      "input_tokens": 3906,
+      "cached_tokens": 0,
+      "cache_write_tokens": 1382,
+      "output_tokens": 385,
+      "requests": 4,
+      "cost_usd": 0.000618,
+      "by_agent": {
+        "librarian_chat": {
+          "input_tokens": 3906,
+          "cached_tokens": 0,
+          "cache_write_tokens": 1382,
+          "output_tokens": 385,
+          "requests": 4
+        }
+      }
+    }
   }
 ]

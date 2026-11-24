@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, View } from 'react-native';
 import BookCover from '@/components/BookCover';
 import { Canvas, useFrame } from '@react-three/fiber';
+import { useIsFocused } from 'expo-router';
 import * as THREE from 'three';
 
 import { Book, coverFor } from '@/api';
@@ -153,6 +154,10 @@ export default function Book3D({ book, base, height = 330 }: { book: Book; base:
   const faces = book.faces || [];
   const spinnable = ['front', 'back', 'spine'].every((f) => faces.includes(f));
   const [ready, setReady] = useState(false);
+  const focused = useIsFocused();
+  useEffect(() => {
+    if (!focused) setReady(false); // show the 2D cover again while the 3D view comes back
+  }, [focused]);
   // start three-quarter on, so cover and spine both show
   const spin = useRef<Spin>({ y: 0.45, x: 0.08, vy: 0, dragging: false });
   const last = useRef({ dx: 0, t: 0 });
@@ -192,19 +197,22 @@ export default function Book3D({ book, base, height = 330 }: { book: Book; base:
           <BookCover title={book.title} author={book.author} uri={coverFor(book)} width={height * 0.42} />
         </View>
       )}
+      {/* give the GL context back while another screen (the busts, a reader) covers this one */}
+      {focused && (
       <Canvas
-        dpr={[1, 2]}
-        gl={{ antialias: true }}
-        camera={{ fov: 35, position: [0, 0.2, 6.2] }}
-        style={{ flex: 1, backgroundColor: 'transparent' }}
-        onCreated={() => setTimeout(() => setReady(true), 250)}
-      >
-        <ambientLight intensity={0.65} color="#A9CDBE" />
-        <directionalLight position={[1.5, 2.5, 6]} intensity={1.9} color="#FFE9C2" />
-        <directionalLight position={[-3, 1, -4]} intensity={0.5} color="#9FC3F0" />
-        <pointLight position={[0, 3, 2]} intensity={5} distance={8} color="#F2B53A" />
-        <Model book={book} base={base} spin={spin} spinnable={spinnable} />
-      </Canvas>
+          dpr={[1, 2]}
+          gl={{ antialias: true }}
+          camera={{ fov: 35, position: [0, 0.2, 6.2] }}
+          style={{ flex: 1, backgroundColor: 'transparent' }}
+          onCreated={() => setTimeout(() => setReady(true), 250)}
+        >
+          <ambientLight intensity={0.65} color="#A9CDBE" />
+          <directionalLight position={[1.5, 2.5, 6]} intensity={1.9} color="#FFE9C2" />
+          <directionalLight position={[-3, 1, -4]} intensity={0.5} color="#9FC3F0" />
+          <pointLight position={[0, 3, 2]} intensity={5} distance={8} color="#F2B53A" />
+          <Model book={book} base={base} spin={spin} spinnable={spinnable} />
+        </Canvas>
+      )}
     </View>
   );
 }

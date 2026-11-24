@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -35,11 +35,30 @@ export default function Library() {
   const [gaps, setGaps] = useState<Gap[]>([]);
   const [verdicts, setVerdicts] = useState<Record<string, Verdict[]>>({});
   const [decor, setDecor] = useState<Decor[]>([]);
-  const loadDecor = useCallback(() => api.decor().then(setDecor).catch(() => {}), []);
+  // coming back to this tab refetches, but only a real change re-renders: a fresh array with the same
+  // books would rebuild the whole 3D bookcase and re-carve every bust for nothing
+  const seen = useRef({ books: '', decor: '' });
+  const loadDecor = useCallback(
+    () =>
+      api
+        .decor()
+        .then((d) => {
+          const k = JSON.stringify(d);
+          if (k !== seen.current.decor) {
+            seen.current.decor = k;
+            setDecor(d);
+          }
+        })
+        .catch(() => {}),
+    [],
+  );
   const load = useCallback(async () => {
     try {
       const all = await api.books('all');
       loadDecor();
+      const k = JSON.stringify(all);
+      if (k === seen.current.books) return;
+      seen.current.books = k;
       setBooks(all);
       // friends' ratings for your books (wishlist + TBR first), keyed by title|author
       const want = all.filter((b) => b.status === 'wishlist' || b.tbr).concat(all.filter((b) => !(b.status === 'wishlist' || b.tbr)));

@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useIsFocused, useRouter } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
@@ -19,7 +19,12 @@ type Mode = 'camera' | 'search' | 'isbn' | 'import' | 'manual';
 
 export default function Add() {
   const insets = useSafeAreaInsets();
+  // Settings can open this screen straight on Import (/add?mode=import)
+  const { mode: start } = useLocalSearchParams<{ mode?: string }>();
   const [mode, setMode] = useState<Mode>('camera');
+  useEffect(() => {
+    if (start === 'import') setMode('import');
+  }, [start]);
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insets.top + 18, paddingHorizontal: 20, paddingBottom: 60 }}>

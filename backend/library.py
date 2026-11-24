@@ -174,6 +174,20 @@ def _insert_book(con: sqlite3.Connection, b: dict) -> int:
     return int(cur.lastrowid)
 
 
+PAGES_PER_HOUR = 40   # a typical adult reading pace for a novel (about 250 words a page, 170 words a minute)
+
+
+def hours_spent(b: dict) -> float:
+    """Hours read for one book: what the reader typed in if they did, otherwise estimated from the
+    pages they have read (all of them once it is marked finished, else their progress)."""
+    typed = b.get("hours_read") or 0
+    if typed > 0:
+        return float(typed)
+    pages = b.get("pages") or 320
+    done = 1.0 if b.get("read_state") == "read" else float(b.get("progress") or 0)
+    return round(pages * max(0.0, min(1.0, done)) / PAGES_PER_HOUR, 1)
+
+
 def book_to_dict(r: sqlite3.Row) -> dict:
     d = dict(r)
     try:
@@ -181,6 +195,7 @@ def book_to_dict(r: sqlite3.Row) -> dict:
     except json.JSONDecodeError:
         d["subjects"] = []
     d["favourite"] = bool(d.get("favourite"))
+    d["hours_est"] = hours_spent(d)   # shown wherever hours are; the stored hours_read stays what was typed
     d["reading"] = bool(d.get("reading"))
     d["tbr"] = bool(d.get("tbr"))
     try:
@@ -252,8 +267,10 @@ def reorder(ids: list[int]) -> None:
 def stats(user_id: int | None = None) -> dict:
     u = user_id or uid()
     with db() as con:
-        owned = con.execute("SELECT COUNT(*), COALESCE(SUM(hours_read),0), COALESCE(SUM(pages),0) "
+        owned = con.execute("SELECT COUNT(*), 0, COALESCE(SUM(pages),0) "
                             "FROM books WHERE status='owned' AND user_id=?", (u,)).fetchone()
+        hours = sum(hours_spent(dict(r)) for r in con.execute(
+            "SELECT hours_read, pages, progress, read_state FROM books WHERE status='owned' AND user_id=?", (u,)))
         authors = con.execute("SELECT COUNT(DISTINCT author) FROM books WHERE status='owned' AND user_id=?", (u,)).fetchone()[0]
         reading = con.execute("SELECT COUNT(*) FROM books WHERE reading=1 AND user_id=?", (u,)).fetchone()[0]
         wish = con.execute("SELECT COUNT(*) FROM books WHERE status='wishlist' AND user_id=?", (u,)).fetchone()[0]
@@ -264,7 +281,7 @@ def stats(user_id: int | None = None) -> dict:
     finally:
         current_user.reset(token)
     return {
-        "books": owned[0], "hours_read": round(owned[1], 1), "pages": owned[2], "authors": authors,
+        "books": owned[0], "hours_read": round(hours, 1), "pages": owned[2], "authors": authors,
         "reading_now": reading, "wishlist": wish, "favourites": favs,
         "missing_from_collections": sum(len(g["missing"]) for g in gaps),
     }
@@ -359,6 +376,44 @@ def collection_gaps() -> list[dict]:
         if have and missing:   # only a "gap" if you've started the set
             out.append({"collection": c["name"], "author": c["author"], "have": have, "missing": missing})
     return out
+
+
+def related(book: dict) -> dict:
+    """For one book's page (plain code, $0): the reader's other copies of the same title, and the
+    series it belongs to, volume by volume, with what they own and what is still missing."""
+    books = list_books(None)
+    owned = [b for b in books if b["status"] == "owned"]
+    me = book["id"]
+
+    def brief(b: dict) -> dict:
+        return {k: b.get(k) for k in ("id", "title", "author", "publisher", "year", "binding", "edition",
+                                      "cover_url", "status", "series_index")}
+
+    same = norm(book["title"])
+    copies = [brief(b) for b in books
+              if b["id"] != me and norm(b["title"]) == same and _surname(b.get("author")) == _surname(book.get("author"))]
+
+    series = None
+    for c in collections():
+        named = book.get("collection") and norm(c["name"]) == norm(book["collection"])
+        in_it = any(similarity(book["title"], book.get("author"), t, c["author"]) >= OWNED_THRESHOLD for t in c["members"])
+        if named or in_it:
+            members = []
+            for idx, t in enumerate(c["members"], 1):
+                hit, _ = match_owned(t, c["author"], owned)
+                this = similarity(book["title"], book.get("author"), t, c["author"]) >= OWNED_THRESHOLD
+                members.append({"index": idx, "title": t, "id": me if this else (hit["id"] if hit else None),
+                                "owned": bool(hit) or (this and book["status"] == "owned"), "current": this})
+            series = {"name": c["name"], "author": c["author"], "members": members}
+            break
+    if series is None and book.get("collection"):
+        # a collection the reader named themselves: the volumes they have, in order
+        mine = sorted([b for b in books if b.get("collection") and norm(b["collection"]) == norm(book["collection"])],
+                      key=lambda b: (b.get("series_index") or 999, b["title"]))
+        series = {"name": book["collection"], "author": book.get("author"),
+                  "members": [{"index": b.get("series_index"), "title": b["title"], "id": b["id"],
+                               "owned": b["status"] == "owned", "current": b["id"] == me} for b in mine]}
+    return {"copies": copies, "series": series}
 
 
 def gap_for(title: str, author: str | None) -> dict | None:
