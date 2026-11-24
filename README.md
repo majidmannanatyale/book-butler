@@ -18,6 +18,12 @@ The rest of the app:
 
 > 🎬 **Demo video (3 min, recorded on my Pixel):** [docs/demo.mp4](docs/demo.mp4). Home, the 3D bookcase, a pick, the marble busts, the Librarian, collections, a live Book Finder session and adding a book by photo.
 
+> 📱 **Please test it on an Android phone.** The Book Butler is a phone app: the Book Finder films a real shelf, the busts stand in your room through the camera, and the Librarian listens. None of that is possible in a browser.
+>
+> **Download the app: [The Book Butler for Android (APK)](https://expo.dev/artifacts/eas/Q0NlX0uajkAljDYbU-S1VVYnql_X4V4hc2etbrc2tiI.apk)**
+>
+> Then follow the [Android setup checklist](#test-it-on-android-recommended) below. It takes about 10 minutes, most of it `pip install` and building the sample library.
+
 > **Testing it? Use the sample library.** Most of the app only shows what it can do once there is a real collection in it: series with gaps, favourites, friends, ratings, marble busts. Unless you already have a large library of your own to import, log in with the ready-made tester account:
 >
 > **Username `booktester` · password `butler-test-2026`**
@@ -28,7 +34,7 @@ The rest of the app:
 
 ## Run it
 
-You need **Python 3.11+** and **Node 20+**.
+You need **Python 3.11+** for the backend, and an **Android phone** (Android 8.0 or newer) for the app. **Node 20+** is only needed for the browser fallback.
 
 From a fresh clone to the app running in a browser takes about 3–5 minutes. Most of that is `pip install` and `npm install`.
 
@@ -59,21 +65,19 @@ uvicorn main:app --host 0.0.0.0 --port 8020
 
 The first start takes about a minute while it builds the database and looks up covers. Then check it at http://localhost:8020/api/health. On first start it builds `data/library.db` from the small demo library in `data/seed_library.json`, which has 31 books and 6 collections.
 
-### 3. The app
+### 3. The app: on an Android phone (recommended)
+
+Install **[the APK](https://expo.dev/artifacts/eas/Q0NlX0uajkAljDYbU-S1VVYnql_X4V4hc2etbrc2tiI.apk)** on the phone and connect it to the backend. Nothing to build: no Node, no `npm install`, no `expo start`. The full checklist is in [Test it on Android](#test-it-on-android-recommended).
+
+On Android, the Book Finder's **recording session** reads spines on the phone itself (Google ML Kit), live, as you sweep. This is the heart of the app and it only exists on the phone.
+
+**Fallback, only if you have no Android phone: the browser.** Most screens work, but there is no live camera scanning; the Book Finder drops to **photo mode** with **Sample shelf** and **Safety test** buttons.
 
 ```powershell
 cd mobile
 npm install
 npx expo start --web
 ```
-
-- **In a browser (the fastest way to try it):** the Book Finder opens in **photo mode**. Use the **Sample shelf** and **Safety test** buttons, so no camera is needed. Here the AI reads the photo on the server.
-- **On Android (the full experience):** the **recording session** reads spines on the phone with Google ML Kit, which needs a native module. That means the project's development build, not Expo Go.
-  1. Install the APK from the EAS build page.
-  2. Put the phone on the same Wi‑Fi as the computer.
-  3. Run `npx expo start` and open the app.
-
-  The app finds the backend automatically. You can override its address in **Settings**.
 
 To start over, stop the backend and delete `data/library.db`. It rebuilds from the seed file.
 
@@ -94,10 +98,32 @@ The app has no shared server. You run your own copy of the backend on your own c
    This makes the account **`booktester`**, password **`butler-test-2026`**. It has 150 books, so you can try every feature without adding anything. It takes a few minutes, because it looks up every cover on Open Library. Run it again any time to reset the account.
 
    Building it makes six small AI calls for the marble busts, about $0.001 on your key. Run `python seed_tester.py --no-busts` to skip them; everything else is free.
-4. **Open the app. Choose one:**
-   - **Android phone:** install the APK from the link you were sent. Put the phone on the **same Wi‑Fi** as your computer. In the app, open **Settings** and set the server address to `http://<your computer's IP>:8020`. On Windows, `ipconfig` shows the IP under "IPv4 Address". No development build or `expo start` is needed.
-   - **Browser, no phone:** run `npx expo start --web` in `mobile` (see step 3 above). Live camera scanning needs the phone; everything else works.
+4. **Open the app on an Android phone.** Follow [Test it on Android](#test-it-on-android-recommended) just below.
 5. **Log in** as `booktester`.
+
+### Test it on Android (recommended)
+
+**What you need**
+- An **Android phone, Android 8.0 or newer**. Wi‑Fi is enough; a USB cable is an alternative (see [Install with a USB cable](#install-with-a-usb-cable-usb-debugging)), and the easiest fix if your network blocks devices.
+- The **computer running the backend** (steps 1–3 above), left running.
+- **The phone and the computer on the same Wi‑Fi.** A home or office network works. Guest networks and some campus networks (eduroam, for example) block devices from seeing each other; use a phone hotspot or home Wi‑Fi instead.
+
+**Steps** (or hand the whole job to an AI assistant: [Give this to your AI](#give-this-to-your-ai-to-copy))
+1. **Download the app on the phone:** open **[The Book Butler APK](https://expo.dev/artifacts/eas/Q0NlX0uajkAljDYbU-S1VVYnql_X4V4hc2etbrc2tiI.apk)** in the phone's browser and download it.
+2. **Install it.** Open the downloaded file. If Android asks, allow your browser to **install unknown apps** (Settings → Apps → *your browser* → Install unknown apps), then tap **Install**. Google Play Protect may warn that the app is unrecognised: tap **Install anyway**.
+3. **Find your computer's address.**
+   - Windows: run `ipconfig` and copy the **IPv4 Address** of your Wi‑Fi adapter (for example `192.168.1.7`).
+   - macOS: run `ipconfig getifaddr en0`.
+4. **Check the phone can reach the backend:** in the phone's browser open `http://<that address>:8020/api/health`. You should see `"ok":true`. If not, see Troubleshooting below (usually the firewall).
+5. **Point the app at your computer.** Open The Book Butler, go to **Settings → Library server**, enter `http://<that address>:8020` and tap **Save & reconnect**.
+6. **Log in** as **`booktester`** / **`butler-test-2026`** (Settings → **Open my account**).
+7. **Allow the camera** when asked (Book Finder, photos, busts). The microphone is only for asking the Librarian by voice.
+
+**What to try first**
+- **Book Finder** (the gold button in the middle): press record and sweep slowly along any real shelf. Books in booktester's library get a ✓, series gaps a ◆, and the rest are rated for booktester's taste.
+- **Library**: the 3D bookcase; tap a spine, then **Characters** to see the marble busts.
+- **Ask the Librarian** (top of the Library): "Which series am I closest to finishing?"
+- **Settings → The Ledger**: every AI call and what it cost.
 
 **What's in the sample account:**
 
@@ -121,6 +147,84 @@ The app has no shared server. You run your own copy of the backend on your own c
 - **AI features say the daily budget is used up:** the cap is $0.50 a day. Raise it with `DAILY_BUDGET_USD` in `.env`.
 
 ---
+
+### Accounts and keys you need
+
+| What | Needed? | Notes |
+|---|---|---|
+| **An API key** | **Yes** | `PORTKEY_API_KEY` (course key, gpt-6-luna) or `OPENAI_API_KEY`, in a `.env` file in the repo folder **or the folder above it**. The names are listed in `.env.example`. |
+| **A Book Butler login** | Yes, made for you | `python seed_tester.py` creates **`booktester`** / **`butler-test-2026`**. You can also tap **Create account** in the app to start an empty library of your own. |
+| A Google account / Play Store | No | The APK installs directly. |
+| An Expo or EAS account | No | The APK is already built. |
+| A GitHub account | No | The repo is public. |
+| Goodreads or Libib | No | Only if you want to import your own library (Add → Import). |
+
+### Install with a USB cable (USB debugging)
+
+**Optional. No USB cable? That's fine:** the Wi‑Fi steps above are all you need. Use this route if you prefer a cable, or if the phone can't reach your computer over Wi‑Fi (guest or campus networks). The cable carries the app's traffic too, so Wi‑Fi doesn't matter at all.
+
+1. **Turn on USB debugging on the phone.**
+   - Settings → **About phone** → tap **Build number** seven times, until it says you are a developer. (On Samsung: About phone → Software information → Build number.)
+   - Settings → **System → Developer options** → turn on **USB debugging**.
+2. **Install adb** (Android's command-line tool) on the computer:
+   - Windows: `winget install Google.PlatformTools`, or download *SDK Platform-Tools* from developer.android.com and unzip it.
+   - macOS: `brew install android-platform-tools`
+3. **Plug the phone in.** On the phone, tap **Allow** on "Allow USB debugging?". Check with `adb devices`: the phone should be listed as `device`, not `unauthorized`.
+4. **Download and install the app from the computer:**
+
+   ```powershell
+   curl -L -o BookButler.apk "https://expo.dev/artifacts/eas/Q0NlX0uajkAljDYbU-S1VVYnql_X4V4hc2etbrc2tiI.apk"
+   adb install -r BookButler.apk
+   ```
+
+5. **Connect the app to your backend through the cable:**
+
+   ```powershell
+   adb reverse tcp:8020 tcp:8020
+   ```
+
+   Then in the app: **Settings → Library server** → `http://localhost:8020` → **Save & reconnect**. Run `adb reverse` again if you unplug the phone.
+6. **Log in** as `booktester` / `butler-test-2026`.
+
+### Give this to your AI to copy
+
+Using Claude Code, Codex, Cursor or another AI coding assistant? Paste everything in the box below into it. It will set up the backend, build the sample library and install the app on your phone.
+
+```text
+Please set up "The Book Butler" for me to test on my Android phone. Work step by step and tell me
+when you need me to do something on the phone.
+
+Repo: https://github.com/majidmannanatyale/book-butler
+Android app (APK): https://expo.dev/artifacts/eas/Q0NlX0uajkAljDYbU-S1VVYnql_X4V4hc2etbrc2tiI.apk
+
+1. Clone the repo (on Windows into a short folder such as C:\Users\<me>\book-butler, because a
+   deep path breaks pip on Windows). If I already have it, use my copy.
+2. API key: the backend reads .env from the repo folder first, then the folder above it. Check
+   whether either has PORTKEY_API_KEY or OPENAI_API_KEY. If neither does, copy .env.example to .env
+   and ask me to paste my key into it myself. Never print, log or commit the key.
+3. Python 3.11+. On Windows on ARM (Snapdragon), use the x64 (AMD64) Python, not ARM64:
+   `python -c "import sysconfig; print(sysconfig.get_platform())"` must say win-amd64.
+4. Backend: in backend/, create a venv, `pip install -r ../requirements.txt`, then start
+   `uvicorn main:app --host 0.0.0.0 --port 8020` in the background. Wait until
+   http://localhost:8020/api/health returns "ok": true (the first start takes about a minute).
+5. Sample library: in backend/ with the venv, run `python seed_tester.py` (about 4 minutes). It
+   creates the login booktester / butler-test-2026 with 150 books.
+6. Phone. Ask me which way I want:
+   (A USB cable is optional. If I don't have one, use b) Wi-Fi.)
+   a) USB cable: help me turn on USB debugging (Settings > About phone > tap Build number 7 times;
+      then Developer options > USB debugging). Install adb if missing (Windows: winget install
+      Google.PlatformTools; macOS: brew install android-platform-tools). Run `adb devices` and
+      have me tap Allow on the phone. Then download the APK, `adb install -r BookButler.apk`,
+      and `adb reverse tcp:8020 tcp:8020`. The server address in the app is http://localhost:8020
+   b) Wi-Fi: find this computer's LAN IP (Windows: ipconfig, IPv4 Address of the Wi-Fi adapter;
+      macOS: ipconfig getifaddr en0). If the phone can't open http://<IP>:8020/api/health,
+      allow Python through the firewall for private networks on port 8020. Have me download the
+      APK on the phone and allow "install unknown apps". The server address is http://<IP>:8020
+7. Tell me to open The Book Butler, go to Settings > Library server, enter the server address,
+   tap Save & reconnect, then log in as booktester / butler-test-2026 and allow the camera.
+8. Finish by telling me what to try: the Book Finder (gold button) on a real bookshelf, the 3D
+   bookcase and Characters, Ask the Librarian, and Settings > The Ledger.
+```
 
 ## How it works
 
